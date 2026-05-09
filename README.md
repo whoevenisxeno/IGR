@@ -1,5 +1,7 @@
 # IGR v3.2
 
+<p align="center"><img src="logos/igr-logo2.png" width="200"></p>
+
 Silent auto-start remote access tool for Windows. Deploys via USB, starts before login, and exposes a full-featured web dashboard through a Cloudflared tunnel.
 
 ## Quick Start
