@@ -1548,26 +1548,26 @@ DASHBOARD_HTML = r'''
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">IGR</div>
-                <button class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+                <button class="sidebar-toggle" onclick="toggleSidebar()">[=]</button>
             </div>
             <div class="sidebar-status">
                 <div class="status-row"><div class="status-dot" id="connDot"></div><span id="connLabel">Connected</span></div>
                 <div class="status-row"><div class="status-dot"></div><span id="uptimeLabel">Uptime: 0m</span></div>
             </div>
             <div class="sidebar-nav">
-                <div class="nav-item active" onclick="showPage('home')"><span class="nav-icon">&#9751;</span><span class="nav-text">Home</span></div>
-                <div class="nav-item" onclick="showPage('screen')"><span class="nav-icon">&#9635;</span><span class="nav-text">Screen</span></div>
-                <div class="nav-item" onclick="showPage('webcam')"><span class="nav-icon">&#9673;</span><span class="nav-text">Webcam</span></div>
-                <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">&#9998;</span><span class="nav-text">Control</span></div>
-                <div class="nav-item" onclick="showPage('keylogger')"><span class="nav-icon">&#9997;</span><span class="nav-text">Keylogger</span></div>
-                <div class="nav-item" onclick="showPage('files')"><span class="nav-icon">&#128193;</span><span class="nav-text">Files</span></div>
-                <div class="nav-item" onclick="showPage('shell')"><span class="nav-icon">&#9656;</span><span class="nav-text">Shell</span></div>
-                <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">&#9881;</span><span class="nav-text">Troll</span></div>
-                <div class="nav-item" onclick="showPage('harvest')"><span class="nav-icon">&#9775;</span><span class="nav-text">Harvest</span></div>
-                <div class="nav-item" onclick="showPage('system')"><span class="nav-icon">&#9881;</span><span class="nav-text">System</span></div>
-                <div class="nav-item" onclick="showPage('processes')"><span class="nav-icon">&#9776;</span><span class="nav-text">Processes</span></div>
-                <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">&#10148;</span><span class="nav-text">Remote</span></div>
-                <div class="nav-item" onclick="showPage('stealth')"><span class="nav-icon">&#9733;</span><span class="nav-text">Stealth</span></div>
+                <div class="nav-item active" onclick="showPage('home')"><span class="nav-icon">[H]</span><span class="nav-text">Home</span></div>
+                <div class="nav-item" onclick="showPage('screen')"><span class="nav-icon">[S]</span><span class="nav-text">Screen</span></div>
+                <div class="nav-item" onclick="showPage('webcam')"><span class="nav-icon">[W]</span><span class="nav-text">Webcam</span></div>
+                <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">[C]</span><span class="nav-text">Control</span></div>
+                <div class="nav-item" onclick="showPage('keylogger')"><span class="nav-icon">[K]</span><span class="nav-text">Keylogger</span></div>
+                <div class="nav-item" onclick="showPage('files')"><span class="nav-icon">[F]</span><span class="nav-text">Files</span></div>
+                <div class="nav-item" onclick="showPage('shell')"><span class="nav-icon">[$]</span><span class="nav-text">Shell</span></div>
+                <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">[T]</span><span class="nav-text">Troll</span></div>
+                <div class="nav-item" onclick="showPage('harvest')"><span class="nav-icon">[D]</span><span class="nav-text">Harvest</span></div>
+                <div class="nav-item" onclick="showPage('system')"><span class="nav-icon">[I]</span><span class="nav-text">System</span></div>
+                <div class="nav-item" onclick="showPage('processes')"><span class="nav-icon">[P]</span><span class="nav-text">Processes</span></div>
+                <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">[R]</span><span class="nav-text">Remote</span></div>
+                <div class="nav-item" onclick="showPage('stealth')"><span class="nav-icon">[X]</span><span class="nav-text">Stealth</span></div>
             </div>
         </div>
 
