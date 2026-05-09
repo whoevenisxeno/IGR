@@ -1814,6 +1814,7 @@ DASHBOARD_HTML = r'''
             const res = await fetch('/api/screen/monitors');
             const data = await res.json();
             monitorCount = data.count;
+            window._monitorData = data.monitors;
             const sel = document.getElementById('monitorDropdown');
             sel.innerHTML = '<option value="-1">All Monitors</option>';
             const csel = document.getElementById('controlMonitorDropdown');
@@ -1939,19 +1940,26 @@ DASHBOARD_HTML = r'''
                 document.getElementById('controlBtn').textContent = 'Stop Control';
                 document.getElementById('controlBtn').classList.add('active');
                 isControlOn = true;
+                const getControlOffset = () => {
+                    if (currentControlMonitor == -1 || !window._monitorData) return {ox: 0, oy: 0, w: 1920, h: 1080};
+                    const m = window._monitorData[currentControlMonitor];
+                    return m ? {ox: m.left, oy: m.top, w: m.width, h: m.height} : {ox: 0, oy: 0, w: 1920, h: 1080};
+                };
                 box.onclick = async (e) => {
                     const rect = box.getBoundingClientRect();
-                    const x = Math.round((e.clientX - rect.left) / rect.width * 1920);
-                    const y = Math.round((e.clientY - rect.top) / rect.height * 1080);
-                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x, y})});
+                    const off = getControlOffset();
+                    const x = Math.round((e.clientX - rect.left) / rect.width * off.w);
+                    const y = Math.round((e.clientY - rect.top) / rect.height * off.h);
+                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x, y, offset_x: off.ox, offset_y: off.oy})});
                     await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'click', button: 'left'})});
                 };
                 box.oncontextmenu = async (e) => {
                     e.preventDefault();
                     const rect = box.getBoundingClientRect();
-                    const x = Math.round((e.clientX - rect.left) / rect.width * 1920);
-                    const y = Math.round((e.clientY - rect.top) / rect.height * 1080);
-                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x, y})});
+                    const off = getControlOffset();
+                    const x = Math.round((e.clientX - rect.left) / rect.width * off.w);
+                    const y = Math.round((e.clientY - rect.top) / rect.height * off.h);
+                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x, y, offset_x: off.ox, offset_y: off.oy})});
                     await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'click', button: 'right'})});
                 };
                 controlInterval = setInterval(async () => {
@@ -2329,14 +2337,19 @@ def play_audio():
         def _play_and_cleanup(path):
             try:
                 subprocess.run(['powershell', '-Command',
-                    f'(New-Object Media.SoundPlayer "{path}").PlaySync()'],
-                    capture_output=True, timeout=60, creationflags=0x08000000)
+                    f'$player = New-Object System.Windows.Media.MediaPlayer; $player.Open("{path}"); Start-Sleep -Milliseconds 500; $player.Play(); Start-Sleep -Seconds 60; $player.Close()'],
+                    capture_output=True, timeout=120, creationflags=0x08000000)
             except:
                 try:
-                    import winsound
-                    winsound.PlaySound(path, winsound.SND_FILENAME)
+                    subprocess.run(['powershell', '-Command',
+                        f'(New-Object Media.SoundPlayer "{path}").PlaySync()'],
+                        capture_output=True, timeout=60, creationflags=0x08000000)
                 except:
-                    pass
+                    try:
+                        import winsound
+                        winsound.PlaySound(path, winsound.SND_FILENAME)
+                    except:
+                        pass
             try:
                 os.remove(path)
             except:
@@ -2683,12 +2696,14 @@ def control_mouse():
         x = data.get('x', 0)
         y = data.get('y', 0)
         button = data.get('button', 'left')
+        offset_x = data.get('offset_x', 0)
+        offset_y = data.get('offset_y', 0)
         
         from pynput.mouse import Controller, Button
         mouse = Controller()
         
         if action == 'move':
-            mouse.position = (x, y)
+            mouse.position = (x + offset_x, y + offset_y)
         elif action == 'click':
             if button == 'left':
                 mouse.click(Button.left)
