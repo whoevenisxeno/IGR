@@ -1010,6 +1010,8 @@ DASHBOARD_HTML = r'''
         }
         .page { display: none; flex: 1; }
         .page.active { display: flex; flex-direction: column; }
+        .page-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .page-grid .section { margin-bottom: 0; }
         
         /* Info Cards */
         .info-grid {
@@ -1181,6 +1183,7 @@ DASHBOARD_HTML = r'''
             .info-label { font-size: 10px; margin-bottom: 5px; }
             .info-value { font-size: 16px; }
             .section { padding: 12px; margin-bottom: 12px; }
+            .page-grid { grid-template-columns: 1fr; }
             .section-header { margin-bottom: 10px; padding-bottom: 8px; }
             .section-title { font-size: 14px; }
             .btn { padding: 8px 14px; font-size: 12px; }
@@ -1366,48 +1369,55 @@ DASHBOARD_HTML = r'''
 
             <!-- Troll Page -->
             <div class="page" id="page-troll">
+                <div class="page-grid">
                 <div class="section">
                     <div class="section-header"><div class="section-title">Windows Popups</div></div>
                     <input type="text" id="popupTitle" placeholder="Popup title..." style="margin-bottom: 10px;">
                     <input type="text" id="popupText" placeholder="Popup message..." style="margin-bottom: 15px;">
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn" onclick="sendPopup('normal')" style="flex: 1;">Normal Popup</button>
-                        <button class="btn danger" onclick="sendPopup('persistent')" style="flex: 1;">Persistent Popup</button>
-                        <button class="btn danger" onclick="sendPopup('hydra')" style="flex: 1;">Hydra Popup</button>
+                        <button class="btn" onclick="sendPopup('normal')" style="flex: 1;">Normal</button>
+                        <button class="btn danger" onclick="sendPopup('persistent')" style="flex: 1;">Persistent</button>
+                        <button class="btn danger" onclick="sendPopup('hydra')" style="flex: 1;">Hydra</button>
                     </div>
-                    <button class="btn" onclick="stopPopups()" style="width: 100%; margin-top: 10px;">Stop All Popups</button>
+                    <button class="btn" onclick="stopPopups()" style="width: 100%; margin-top: 10px;">Stop All</button>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Screen Freeze</div></div>
-                    <button class="btn danger" onclick="freezeScreen('black')" style="width: 100%; margin-bottom: 15px;">Freeze Screen (Black)</button>
+                    <button class="btn danger" onclick="freezeScreen('black')" style="width: 100%; margin-bottom: 10px;">Freeze (Black)</button>
                     <input type="file" id="freezeImageInput" accept="image/*" style="margin-bottom: 10px;">
-                    <button class="btn" onclick="freezeScreenImg()" style="width: 100%; margin-bottom: 15px;">Freeze with Uploaded Image</button>
-                    <button class="btn" onclick="unfreezeScreen()" style="width: 100%;">Unfreeze Screen</button>
+                    <button class="btn" onclick="freezeScreenImg()" style="width: 100%; margin-bottom: 10px;">Freeze with Image</button>
+                    <button class="btn" onclick="unfreezeScreen()" style="width: 100%;">Unfreeze</button>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Audio</div></div>
                     <input type="text" id="ttsText" placeholder="Text to speak...">
-                    <button class="btn" onclick="speakText()" style="width: 100%; margin-bottom: 15px;">Speak</button>
+                    <button class="btn" onclick="speakText()" style="width: 100%; margin-bottom: 10px;">Speak</button>
                     <input type="file" id="audioFileInput" accept="audio/*" style="margin-bottom: 10px;">
-                    <button class="btn" onclick="playAudio()" style="width: 100%;">Play</button>
-                    <button class="btn danger" onclick="stopAudio()" style="width: 100%; margin-top: 10px;">Stop</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="playAudio()" style="flex: 1;">Play</button>
+                        <button class="btn danger" onclick="stopAudio()" style="flex: 1;">Stop</button>
+                    </div>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Mouse Jitter</div></div>
-                    <button class="btn danger" onclick="startJitter()" style="width: 100%; margin-bottom: 10px;">Start Jitter</button>
-                    <button class="btn" onclick="stopJitter()" style="width: 100%;">Stop Jitter</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn danger" onclick="startJitter()" style="flex: 1;">Start</button>
+                        <button class="btn" onclick="stopJitter()" style="flex: 1;">Stop</button>
+                    </div>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Ghost Typing</div></div>
-                    <input type="text" id="ghostText" placeholder="Text to type on host...">
-                    <input type="number" id="ghostInterval" value="2" step="0.5" min="0.5" placeholder="Interval (seconds)">
-                    <input type="number" id="ghostCount" value="1" min="1" placeholder="Repeat count">
+                    <input type="text" id="ghostText" placeholder="Text to type...">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="ghostInterval" value="2" step="0.5" min="0.5" placeholder="Secs" style="flex: 1;">
+                        <input type="number" id="ghostCount" value="1" min="1" placeholder="Count" style="flex: 1;">
+                    </div>
                     <button class="btn danger" onclick="ghostType()" style="width: 100%;">Ghost Type</button>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Wallpaper</div></div>
                     <input type="file" id="wallpaperInput" accept="image/*" style="margin-bottom: 10px;">
-                    <button class="btn" onclick="changeWallpaper()" style="width: 100%;">Change Wallpaper</button>
+                    <button class="btn" onclick="changeWallpaper()" style="width: 100%;">Change</button>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Monitor</div></div>
@@ -1416,10 +1426,12 @@ DASHBOARD_HTML = r'''
                         <button class="btn" onclick="monitorOn()" style="flex: 1;">Turn On</button>
                     </div>
                 </div>
+                </div>
             </div>
 
             <!-- Harvest Page -->
             <div class="page" id="page-harvest">
+                <div class="page-grid">
                 <div class="section">
                     <div class="section-header"><div class="section-title">WiFi Passwords</div><button class="btn small" onclick="harvestWifi()">Dump</button></div>
                     <div class="log-box" id="wifiBox">Click Dump to extract saved WiFi passwords...</div>
@@ -1453,10 +1465,12 @@ DASHBOARD_HTML = r'''
                     <input type="text" id="telegramMsg" placeholder="Custom message or leave blank for auto-report">
                     <button class="btn" onclick="sendToTelegram()" style="width: 100%;">Send Report</button>
                 </div>
+                </div>
             </div>
 
             <!-- Remote Page -->
             <div class="page" id="page-remote">
+                <div class="page-grid">
                 <div class="section">
                     <div class="section-header"><div class="section-title">Download & Execute</div></div>
                     <input type="text" id="dlUrl" placeholder="URL to download...">
@@ -1471,7 +1485,7 @@ DASHBOARD_HTML = r'''
                     <input type="text" id="searchRoot" value="C:\\" placeholder="Root directory...">
                     <input type="text" id="searchPattern" placeholder="Filename pattern (e.g. .pdf, passwords)">
                     <button class="btn" onclick="searchFiles()" style="width: 100%;">Search</button>
-                    <div class="log-box" id="searchBox" style="margin-top: 15px;">Results will appear here...</div>
+                    <div class="log-box" id="searchBox" style="margin-top: 10px;">Results appear here...</div>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Open Browser</div></div>
@@ -1487,10 +1501,12 @@ DASHBOARD_HTML = r'''
                     <div class="section-header"><div class="section-title">LAN Scanner</div><button class="btn small" onclick="scanLan()">Scan</button></div>
                     <div class="log-box" id="lanBox">Click Scan to discover devices on local network...</div>
                 </div>
+                </div>
             </div>
 
             <!-- Stealth Page -->
             <div class="page" id="page-stealth">
+                <div class="page-grid">
                 <div class="section">
                     <div class="section-header"><div class="section-title">Internal Spread</div><button class="btn small" onclick="stealthSpread()">Spread Now</button></div>
                     <div class="log-box" id="spreadBox">Copies exe to multiple hidden locations with different names. If one copy is found and deleted, others survive.</div>
@@ -1499,9 +1515,10 @@ DASHBOARD_HTML = r'''
                     <div class="section-header"><div class="section-title">Registry Persistence</div><button class="btn small" onclick="stealthRegistry()">Add Key</button></div>
                     <div class="log-box" id="registryBox">Adds HKCU Run key so IGR starts on login. No admin required.</div>
                 </div>
-                <div class="section">
+                <div class="section" style="grid-column: 1 / -1;">
                     <div class="section-header"><div class="section-title">Current Persistence</div></div>
                     <div id="persistenceInfo" style="line-height: 1.8;">Loading...</div>
+                </div>
                 </div>
             </div>
         </div>
