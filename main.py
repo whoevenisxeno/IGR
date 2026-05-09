@@ -3501,15 +3501,6 @@ def system_info():
     except:
         return jsonify({})
 
-@app.route('/api/system/processes')
-def system_processes():
-    """Get running processes."""
-    try:
-        result = subprocess.run(['tasklist'], capture_output=True, text=True, creationflags=0x08000000)
-        return jsonify({'processes': result.stdout.split('\n')})
-    except:
-        return jsonify({'processes': []})
-
 @app.route('/api/files/list', methods=['POST'])
 def list_files():
     """List files in directory."""
