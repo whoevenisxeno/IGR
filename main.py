@@ -1522,7 +1522,7 @@ DASHBOARD_HTML = r'''
                     </div>
                     <div class="stream-box" id="controlBox" style="cursor: crosshair;">
                         <button class="fullscreen-btn" onclick="toggleFullscreen('controlBox')">[+]</button>
-                        <img id="controlStream" src="" style="display:none; width: 100%; height: 100%;">
+                        <img id="controlStream" src="" style="display:none;">
                         <div class="stream-badge" id="controlBadge" style="display:none;">CONTROLLING</div>
                     </div>
                     <div style="margin-top: 15px;">
@@ -1941,25 +1941,29 @@ DASHBOARD_HTML = r'''
                 document.getElementById('controlBtn').classList.add('active');
                 isControlOn = true;
                 const getControlOffset = () => {
-                    if (currentControlMonitor == -1 || !window._monitorData) return {ox: 0, oy: 0, w: 1920, h: 1080};
+                    if (currentControlMonitor == -1 || !window._monitorData) return {ox: 0, oy: 0};
                     const m = window._monitorData[currentControlMonitor];
-                    return m ? {ox: m.left, oy: m.top, w: m.width, h: m.height} : {ox: 0, oy: 0, w: 1920, h: 1080};
+                    return m ? {ox: m.left, oy: m.top} : {ox: 0, oy: 0};
+                };
+                const mapClickToScreen = (e) => {
+                    const img = document.getElementById('controlStream');
+                    const imgRect = img.getBoundingClientRect();
+                    const relX = (e.clientX - imgRect.left) / imgRect.width;
+                    const relY = (e.clientY - imgRect.top) / imgRect.height;
+                    const screenX = Math.round(relX * img.naturalWidth);
+                    const screenY = Math.round(relY * img.naturalHeight);
+                    const off = getControlOffset();
+                    return {x: screenX, y: screenY, offset_x: off.ox, offset_y: off.oy};
                 };
                 box.onclick = async (e) => {
-                    const rect = box.getBoundingClientRect();
-                    const off = getControlOffset();
-                    const x = Math.round((e.clientX - rect.left) / rect.width * off.w);
-                    const y = Math.round((e.clientY - rect.top) / rect.height * off.h);
-                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x, y, offset_x: off.ox, offset_y: off.oy})});
+                    const c = mapClickToScreen(e);
+                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x: c.x, y: c.y, offset_x: c.offset_x, offset_y: c.offset_y})});
                     await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'click', button: 'left'})});
                 };
                 box.oncontextmenu = async (e) => {
                     e.preventDefault();
-                    const rect = box.getBoundingClientRect();
-                    const off = getControlOffset();
-                    const x = Math.round((e.clientX - rect.left) / rect.width * off.w);
-                    const y = Math.round((e.clientY - rect.top) / rect.height * off.h);
-                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x, y, offset_x: off.ox, offset_y: off.oy})});
+                    const c = mapClickToScreen(e);
+                    await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'move', x: c.x, y: c.y, offset_x: c.offset_x, offset_y: c.offset_y})});
                     await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'click', button: 'right'})});
                 };
                 controlInterval = setInterval(async () => {
