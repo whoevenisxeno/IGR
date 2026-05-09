@@ -1,6 +1,33 @@
-# IGR v3.1
+# IGR v3.2
 
 Silent auto-start remote access tool for Windows. Deploys via USB, starts before login, and exposes a full-featured web dashboard through a Cloudflared tunnel.
+
+## Quick Start
+
+```batch
+git clone https://github.com/whoevenisxeno/IGR.git && cd IGR && build.bat
+```
+
+This clones the repo, reads your `config.txt`, injects credentials, builds `igr.exe`, and offers USB deployment — all in one go.
+
+> First time? Copy `config.example.txt` to `config.txt` and fill in your values before running `build.bat`.
+
+## Configuration
+
+1. Copy `config.example.txt` to `config.txt`
+2. Fill in your values (at least 1 of Discord or Telegram required)
+3. `config.txt` is gitignored — your credentials are never pushed
+
+```ini
+DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+DISCORD_USERNAME=IGR
+DASHBOARD_PASSWORD=YourPassword
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+TELEGRAM_CHAT_ID=987654321
+UPDATE_URL=https://example.com/igr_new.exe
+```
+
+`build.bat` reads `config.txt` and injects the values into the executable at compile time. No credentials remain in source code.
 
 ## Features
 
@@ -33,23 +60,6 @@ imagine/
 ├── config.txt       # Credentials (gitignored)
 └── README.md
 ```
-
-## Configuration
-
-1. Copy `config.example.txt` to `config.txt`
-2. Fill in your values (at least 1 of Discord or Telegram required)
-3. `config.txt` is gitignored — your credentials are never pushed
-
-```ini
-DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
-DISCORD_USERNAME=IGR
-DASHBOARD_PASSWORD=YourPassword
-TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
-TELEGRAM_CHAT_ID=987654321
-UPDATE_URL=https://example.com/igr_new.exe
-```
-
-`build.bat` reads `config.txt` and injects the values into the executable at compile time. No credentials remain in source code.
 
 ## Build
 
