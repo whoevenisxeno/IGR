@@ -519,6 +519,8 @@ def _save_tg_last_update_id(update_id: int):
 
 _TG_CMD_LAST_UPDATE_ID = _load_tg_last_update_id()
 _TG_PENDING_ACTION = None
+_TG_STARTUP_TIME = time.time()
+_TG_DANGEROUS_CMDS = {"/logoff", "/lock", "/reboot", "/shutdown", "/panic", "/hibernate"}
 
 def _download_tg_file(file_id: str, save_path: str) -> bool:
     """Download a file from Telegram by file_id."""
@@ -587,6 +589,10 @@ def _handle_telegram_command(text: str):
     cmd = parts[0].lower()
     args = parts[1] if len(parts) > 1 else ""
     _NO_WINDOW = 0x08000000
+
+    if cmd in _TG_DANGEROUS_CMDS and (time.time() - _TG_STARTUP_TIME) < 60:
+        _send_telegram(f"Blocked {cmd} - startup grace period (60s)")
+        return
 
     if cmd == "/help":
         _send_telegram(
