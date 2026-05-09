@@ -1086,29 +1086,29 @@ def _handle_telegram_file(msg: dict):
             pass
 
 def _telegram_heartbeat(cloudflared_url: str):
-    """Periodically delete old status message and send fresh one with current time."""
+    """Periodically edit the existing status message with updated time."""
     global _TELEGRAM_HEARTBEAT_RUNNING
     while _TELEGRAM_HEARTBEAT_RUNNING:
-        time.sleep(60)
+        time.sleep(300)
         try:
             state = _load_telegram_state()
             pc_data = state.get(_PC_ID, {})
-            old_msg_id = pc_data.get("message_id", "")
-            all_msg_ids = pc_data.get("all_message_ids", [])
-            if old_msg_id:
-                _delete_telegram_message(old_msg_id)
-            for mid in all_msg_ids:
-                if str(mid) != str(old_msg_id):
-                    _delete_telegram_message(str(mid))
+            msg_id = pc_data.get("message_id", "")
+            if not msg_id:
+                continue
             msg_text = _build_pc_status_text(cloudflared_url, "\U0001f7e2 Active")
-            new_msg_id = _send_telegram_get_id(msg_text)
-            if new_msg_id:
-                state[_PC_ID] = {
-                    "message_id": new_msg_id,
-                    "all_message_ids": [new_msg_id],
-                    "last_seen": datetime.now().isoformat(),
-                    "status": "active"
-                }
+            if not _edit_telegram(msg_id, msg_text):
+                new_msg_id = _send_telegram_get_id(msg_text)
+                if new_msg_id:
+                    state[_PC_ID] = {
+                        "message_id": new_msg_id,
+                        "all_message_ids": [new_msg_id],
+                        "last_seen": datetime.now().isoformat(),
+                        "status": "active"
+                    }
+                    _save_telegram_state(state)
+            else:
+                state[_PC_ID]["last_seen"] = datetime.now().isoformat()
                 _save_telegram_state(state)
         except:
             pass
