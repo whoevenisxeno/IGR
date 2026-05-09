@@ -895,11 +895,11 @@ DASHBOARD_HTML = r'''
         }
         .login-box {
             background: #0f0a1a;
-            border: 2px solid #7c3aed;
-            border-radius: 8px;
-            padding: 50px;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 12px;
+            padding: 40px;
             text-align: center;
-            box-shadow: 0 0 40px rgba(124, 58, 237, 0.2);
+            box-shadow: 0 0 60px rgba(124, 58, 237, 0.1);
         }
         .login-title {
             font-size: 42px;
@@ -911,8 +911,8 @@ DASHBOARD_HTML = r'''
             width: 300px;
             padding: 14px 18px;
             background: #0a0a0a;
-            border: 2px solid #7c3aed;
-            border-radius: 4px;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 6px;
             color: #c084fc;
             font-family: 'Courier New', monospace;
             font-size: 16px;
@@ -941,7 +941,7 @@ DASHBOARD_HTML = r'''
             width: 260px;
             min-width: 260px;
             background: #0a0a0f;
-            border-right: 2px solid #7c3aed;
+            border-right: 1px solid rgba(124, 58, 237, 0.2);
             height: 100vh;
             overflow-y: auto;
             display: flex;
@@ -958,7 +958,7 @@ DASHBOARD_HTML = r'''
         .sidebar.collapsed .sidebar-header { justify-content: center; padding: 18px; }
         .sidebar-header {
             padding: 25px;
-            border-bottom: 2px solid #7c3aed;
+            border-bottom: 1px solid rgba(124, 58, 237, 0.2);
             text-align: center;
             display: flex;
             align-items: center;
@@ -1021,10 +1021,10 @@ DASHBOARD_HTML = r'''
             margin-bottom: 30px;
         }
         .info-card {
-            background: #0f0a1a;
-            border: 2px solid #7c3aed;
-            border-radius: 8px;
-            padding: 25px;
+            background: rgba(15, 10, 26, 0.8);
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            border-radius: 10px;
+            padding: 20px;
             text-align: center;
         }
         .info-label { font-size: 13px; color: #888; text-transform: uppercase; margin-bottom: 10px; }
@@ -1032,10 +1032,10 @@ DASHBOARD_HTML = r'''
         
         /* Section */
         .section {
-            background: #0f0a1a;
-            border: 2px solid #7c3aed;
-            border-radius: 8px;
-            padding: 25px;
+            background: rgba(15, 10, 26, 0.8);
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 25px;
             flex: 1;
             display: flex;
@@ -1050,18 +1050,18 @@ DASHBOARD_HTML = r'''
             gap: 10px;
             margin-bottom: 20px;
             padding-bottom: 15px;
-            border-bottom: 1px solid #2a1a3a;
+            border-bottom: 1px solid rgba(124, 58, 237, 0.1);
         }
-        .section-title { font-size: 18px; font-weight: bold; color: #7c3aed; text-transform: uppercase; }
+        .section-title { font-size: 16px; font-weight: 600; color: #7c3aed; text-transform: uppercase; letter-spacing: 1px; }
         .section-header > div { display: flex; gap: 8px; flex-wrap: wrap; }
         
         /* Buttons */
         .btn {
             background: transparent;
             color: #7c3aed;
-            border: 2px solid #7c3aed;
-            padding: 12px 24px;
-            border-radius: 4px;
+            border: 1px solid rgba(124, 58, 237, 0.4);
+            padding: 10px 20px;
+            border-radius: 6px;
             cursor: pointer;
             font-family: 'Courier New', monospace;
             font-size: 15px;
@@ -1069,31 +1069,31 @@ DASHBOARD_HTML = r'''
             transition: all 0.3s;
             margin: 5px;
         }
-        .btn:hover { background: #7c3aed; color: #000; box-shadow: 0 0 15px rgba(124, 58, 237, 0.4); }
-        .btn.active { background: #7c3aed; color: #000; }
+        .btn:hover { background: rgba(124, 58, 237, 0.15); color: #7c3aed; border-color: #7c3aed; box-shadow: 0 0 12px rgba(124, 58, 237, 0.2); }
+        .btn.active { background: #7c3aed; color: #fff; }
         .btn.danger { border-color: #ef4444; color: #ef4444; }
         .btn.danger:hover { background: #ef4444; color: #000; }
         .btn.small { padding: 8px 16px; font-size: 13px; }
         
         /* Inputs */
         input, select, textarea {
-            background: #0a0a0a;
-            border: 2px solid #7c3aed;
-            border-radius: 4px;
-            padding: 12px 16px;
+            background: rgba(10, 10, 10, 0.8);
+            border: 1px solid rgba(124, 58, 237, 0.25);
+            border-radius: 6px;
+            padding: 10px 14px;
             color: #c084fc;
             font-family: 'Courier New', monospace;
             font-size: 15px;
             width: 100%;
             margin-bottom: 12px;
         }
-        input:focus, select:focus { outline: none; box-shadow: 0 0 10px rgba(124, 58, 237, 0.3); }
+        input:focus, select:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 8px rgba(124, 58, 237, 0.15); }
         
         /* Log Box */
         .log-box {
-            background: #050505;
-            border: 2px solid #7c3aed;
-            border-radius: 6px;
+            background: rgba(5, 5, 5, 0.8);
+            border: 1px solid rgba(124, 58, 237, 0.15);
+            border-radius: 8px;
             padding: 15px;
             min-height: 200px;
             flex: 1;
@@ -1105,9 +1105,9 @@ DASHBOARD_HTML = r'''
         
         /* Stream Box */
         .stream-box {
-            background: #050505;
-            border: 2px solid #7c3aed;
-            border-radius: 8px;
+            background: rgba(5, 5, 5, 0.8);
+            border: 1px solid rgba(124, 58, 237, 0.15);
+            border-radius: 10px;
             min-height: 400px;
             flex: 1;
             display: flex;
@@ -1149,15 +1149,15 @@ DASHBOARD_HTML = r'''
         .file-path-bar { display: flex; gap: 15px; margin-bottom: 20px; }
         .file-path-bar input { flex: 1; }
         .file-list {
-            background: #050505;
-            border: 2px solid #7c3aed;
-            border-radius: 6px;
+            background: rgba(5, 5, 5, 0.8);
+            border: 1px solid rgba(124, 58, 237, 0.15);
+            border-radius: 8px;
             flex: 1;
             overflow-y: auto;
         }
         .file-item {
             padding: 14px 20px;
-            border-bottom: 1px solid #2a1a3a;
+            border-bottom: 1px solid rgba(124, 58, 237, 0.1);
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -1222,7 +1222,7 @@ DASHBOARD_HTML = r'''
         /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0a0a0f; }
-        ::-webkit-scrollbar-thumb { background: #7c3aed; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.3); border-radius: 4px; }
     </style>
 </head>
 <body>
