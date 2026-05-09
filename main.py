@@ -3252,11 +3252,13 @@ def troll_mouse_jitter():
                 while getattr(_jitter_loop, 'running', True):
                     try:
                         import random as _r
-                        dx = _r.randint(-50, 50)
-                        dy = _r.randint(-50, 50)
-                        pos = mouse.position
-                        mouse.position = (pos[0] + dx, pos[1] + dy)
-                        time.sleep(_r.uniform(0.5, 3.0))
+                        for _ in range(_r.randint(2, 5)):
+                            dx = _r.randint(-150, 150)
+                            dy = _r.randint(-150, 150)
+                            pos = mouse.position
+                            mouse.position = (pos[0] + dx, pos[1] + dy)
+                            time.sleep(_r.uniform(0.01, 0.05))
+                        time.sleep(_r.uniform(0.05, 0.3))
                     except:
                         break
             _jitter_loop.running = True
