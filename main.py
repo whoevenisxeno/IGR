@@ -2809,7 +2809,7 @@ DASHBOARD_HTML = r'''
 @app.route('/')
 def dashboard():
     """Serve the IGR control dashboard."""
-    return render_template_string(DASHBOARD_HTML)
+    return DASHBOARD_HTML
 
 @app.route('/api/auth', methods=['POST'])
 def auth():
