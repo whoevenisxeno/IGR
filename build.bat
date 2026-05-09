@@ -112,9 +112,9 @@ echo.
 echo [6/6] USB Deployment...
 echo.
 
-REM Detect removable drives (USB sticks)
+REM Detect removable drives (USB sticks) via PowerShell
 set "USB_COUNT=0"
-for /f "tokens=1 delims= " %%d in ('wmic logicaldisk where "drivetype=2" get deviceid 2^>nul ^| find ":"') do (
+for /f "tokens=1 delims= " %%d in ('powershell -Command "Get-WmiObject Win32_LogicalDisk | Where-Object {$_.DriveType -eq 2} | Select-Object -ExpandProperty DeviceID" 2^>nul') do (
     set /a USB_COUNT+=1
     set "USB_!USB_COUNT!=%%d"
 )
