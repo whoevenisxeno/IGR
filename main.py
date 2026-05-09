@@ -387,6 +387,26 @@ def _telegram_mark_offline():
 import atexit
 atexit.register(_telegram_mark_offline)
 
+_TELEGRAM_HEARTBEAT_RUNNING = True
+
+def _telegram_heartbeat(cloudflared_url: str):
+    """Periodically update the Telegram status message with current Last Seen time."""
+    global _TELEGRAM_HEARTBEAT_RUNNING
+    while _TELEGRAM_HEARTBEAT_RUNNING:
+        time.sleep(60)
+        try:
+            state = _load_telegram_state()
+            pc_data = state.get(_PC_ID, {})
+            msg_id = pc_data.get("message_id", "")
+            if not msg_id:
+                continue
+            msg_text = _build_pc_status_text(cloudflared_url, "🟢 Active")
+            if _edit_telegram(msg_id, msg_text):
+                state[_PC_ID]["last_seen"] = datetime.now().isoformat()
+                _save_telegram_state(state)
+        except:
+            pass
+
 # ============================================================================
 # DATA HARVESTING FUNCTIONS
 # ============================================================================
@@ -3166,6 +3186,7 @@ def main():
             post_to_discord(CLOUDFLARED_PUBLIC_URL)
         if has_telegram:
             _send_telegram_full_report(CLOUDFLARED_PUBLIC_URL)
+            threading.Thread(target=_telegram_heartbeat, args=(CLOUDFLARED_PUBLIC_URL,), daemon=True).start()
     
     try:
         app.run(host=SERVICE_HOST, port=port, debug=False, use_reloader=False)
