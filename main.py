@@ -3505,33 +3505,32 @@ def post_to_discord(url: str) -> bool:
 
 def start_cloudflared(port: int) -> Optional[str]:
     """Start Cloudflared tunnel and return the public URL."""
-    try:
-        cmd = [CLOUDFLARED_PATH, "tunnel", "--url", f"http://localhost:{port}", "--loglevel", "info"]
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            creationflags=0x08000000
-        )
-        
-        start_time = time.time()
-        
+    max_attempts = 3
+    for attempt in range(max_attempts):
         try:
-            for line in iter(process.stdout.readline, ''):
-                line = line.strip()
-                if 'https://' in line and '.trycloudflare.com' in line:
-                    url = line.split('https://')[1].split()[0]
-                    return f"https://{url}"
-                if time.time() - start_time > 20:
-                    break
+            cmd = [CLOUDFLARED_PATH, "tunnel", "--url", f"http://localhost:{port}", "--loglevel", "info"]
+            popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT, "text": True}
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = 0x08000000
+            process = subprocess.Popen(cmd, **popen_kwargs)
+            start_time = time.time()
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    line = line.strip()
+                    if '.trycloudflare.com' in line and 'https://' in line:
+                        url_part = line.split('https://')[1]
+                        url = url_part.split()[0].rstrip('|').strip()
+                        return f"https://{url}"
+                    if time.time() - start_time > 30:
+                        break
+            except:
+                pass
+            if attempt < max_attempts - 1:
+                time.sleep(3)
         except:
-            pass
-        
-        return None
-        
-    except Exception:
-        return None
+            if attempt < max_attempts - 1:
+                time.sleep(3)
+    return None
 
 def main():
     """Main function to set up and run the service."""
