@@ -1362,54 +1362,62 @@ DASHBOARD_HTML = r'''
         
         /* Mobile */
         @media (max-width: 768px) {
-            .sidebar { width: 50px; min-width: 50px; }
-            .sidebar.collapsed { width: 50px; min-width: 50px; }
-            .sidebar-logo { font-size: 14px; }
-            .sidebar-header { padding: 12px 8px; }
-            .sidebar-toggle { display: none; }
-            .nav-item { padding: 12px 8px; justify-content: center; font-size: 12px; }
-            .nav-text { display: none; }
-            .nav-icon { font-size: 14px; width: 20px; }
-            .main-content { padding: 12px; }
-            .info-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-            .info-card { padding: 12px; }
-            .info-label { font-size: 10px; margin-bottom: 5px; }
-            .info-value { font-size: 16px; }
-            .section { padding: 12px; margin-bottom: 12px; }
+            .sidebar {
+                position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+                width: 100% !important; min-width: unset !important;
+                height: 56px; flex-direction: row; z-index: 1000;
+                border-top: 1px solid rgba(124, 58, 237, 0.2);
+                border-right: none;
+                overflow-x: auto; overflow-y: hidden;
+            }
+            .sidebar.collapsed { width: 100% !important; min-width: unset !important; }
+            .sidebar-header, .sidebar-logo, .sidebar-toggle { display: none; }
+            .nav-item {
+                flex: 1; min-width: 0; padding: 8px 4px;
+                justify-content: center; font-size: 10px; flex-direction: column; gap: 2px;
+            }
+            .nav-text { display: block; font-size: 9px; }
+            .nav-icon { font-size: 16px; width: auto; }
+            .main-content { padding: 12px; padding-bottom: 68px; margin-left: 0 !important; }
+            .info-grid { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+            .info-card { padding: 10px; }
+            .info-label { font-size: 9px; margin-bottom: 3px; }
+            .info-value { font-size: 14px; }
+            .section { padding: 12px; margin-bottom: 10px; }
             .page-grid { grid-template-columns: 1fr; }
-            .section-header { margin-bottom: 10px; padding-bottom: 8px; }
+            .section-header { flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; }
             .section-title { font-size: 14px; }
-            .btn { padding: 8px 14px; font-size: 12px; }
-            .btn.small { padding: 6px 10px; font-size: 11px; }
-            input, select, textarea { padding: 8px 10px; font-size: 13px; }
+            .btn { padding: 10px 16px; font-size: 13px; min-height: 40px; }
+            .btn.small { padding: 8px 12px; font-size: 11px; min-height: 34px; }
+            input, select, textarea { padding: 10px 12px; font-size: 14px; min-height: 40px; }
             .log-box { min-height: 120px; font-size: 12px; padding: 10px; }
-            .stream-box { min-height: 200px; }
+            .stream-box { min-height: 220px; }
             .stream-badge { padding: 4px 10px; font-size: 10px; top: 8px; right: 8px; }
-            .fullscreen-btn { padding: 6px 10px; font-size: 12px; top: 8px; left: 8px; }
-            .file-item { padding: 10px 12px; font-size: 13px; }
-            .file-path-bar { gap: 8px; margin-bottom: 10px; }
-            .login-box { padding: 30px; width: 90%; max-width: 320px; }
-            .login-title { font-size: 32px; }
-            .login-input { font-size: 14px; padding: 10px; width: 100%; }
-            .login-btn { font-size: 14px; padding: 10px; }
+            .fullscreen-btn { padding: 8px 12px; font-size: 14px; top: 8px; left: 8px; }
+            .file-item { padding: 12px; font-size: 13px; }
+            .file-path-bar { gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+            .login-box { padding: 30px; width: 92%; max-width: 340px; }
+            .login-title { font-size: 30px; }
+            .login-input { font-size: 14px; padding: 12px; width: 100%; }
+            .login-btn { font-size: 14px; padding: 12px; }
         }
         @media (max-width: 480px) {
-            .sidebar { width: 40px; min-width: 40px; }
-            .sidebar.collapsed { width: 40px; min-width: 40px; }
-            .nav-item { padding: 10px 6px; }
-            .nav-icon { font-size: 12px; }
-            .main-content { padding: 8px; }
-            .info-grid { grid-template-columns: 1fr; gap: 8px; }
-            .info-card { padding: 10px; }
-            .info-value { font-size: 14px; }
+            .sidebar { height: 50px; }
+            .nav-item { padding: 6px 2px; }
+            .nav-icon { font-size: 14px; }
+            .nav-text { font-size: 8px; }
+            .main-content { padding: 8px; padding-bottom: 60px; }
+            .info-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+            .info-card { padding: 8px; }
+            .info-value { font-size: 13px; }
             .section { padding: 10px; }
-            .section-title { font-size: 12px; }
-            .btn { padding: 7px 10px; font-size: 11px; }
-            input, select, textarea { padding: 7px 8px; font-size: 12px; }
+            .section-title { font-size: 13px; }
+            .btn { padding: 9px 12px; font-size: 12px; }
+            input, select, textarea { padding: 9px 10px; font-size: 13px; }
             .log-box { min-height: 100px; font-size: 11px; }
-            .stream-box { min-height: 150px; }
+            .stream-box { min-height: 180px; }
             .login-box { padding: 20px; }
-            .login-title { font-size: 26px; }
+            .login-title { font-size: 24px; }
         }
         
         /* Scrollbar */
