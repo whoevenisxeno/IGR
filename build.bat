@@ -188,6 +188,15 @@ copy /y "setup.bat" "%USB_DRIVE%\setup.bat" >nul
 echo   Done.
 
 echo.
+set /p "CLEANUP_CHOICE=Also copy cleanup.bat to USB? (y/n): "
+if /i "%CLEANUP_CHOICE%"=="y" (
+    copy /y "cleanup.bat" "%USB_DRIVE%\cleanup.bat" >nul
+    echo   cleanup.bat copied to USB root.
+) else (
+    echo   Skipped cleanup.bat.
+)
+
+echo.
 echo ============================================
 echo   BUILD + USB DEPLOY SUCCESSFUL
 echo ============================================
