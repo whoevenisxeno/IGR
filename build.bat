@@ -128,7 +128,7 @@ if %USB_COUNT%==0 (
     echo   Output: dist\igr.exe
     echo.
     echo   Manually copy to USB:
-    echo     USB root:       setup.bat
+    echo     USB root:       setup.bat, cleanup.bat
     echo     USB\subfiles\:   igr.exe, cloudflared.exe
     echo ============================================
     echo.
@@ -187,11 +187,13 @@ copy /y "cloudflared.exe" "%USB_DRIVE%\subfiles\cloudflared.exe" >nul
 copy /y "setup.bat" "%USB_DRIVE%\setup.bat" >nul
 echo   Done.
 
+set "CLEANUP_COPIED=0"
 echo.
 set /p "CLEANUP_CHOICE=Also copy cleanup.bat to USB? (y/n): "
 if /i "%CLEANUP_CHOICE%"=="y" (
     copy /y "cleanup.bat" "%USB_DRIVE%\cleanup.bat" >nul
     echo   cleanup.bat copied to USB root.
+    set "CLEANUP_COPIED=1"
 ) else (
     echo   Skipped cleanup.bat.
 )
@@ -202,6 +204,7 @@ echo   BUILD + USB DEPLOY SUCCESSFUL
 echo ============================================
 echo   USB: %USB_DRIVE%
 echo     Root:       setup.bat
+if "%CLEANUP_COPIED%"=="1" echo     Root:       cleanup.bat
 echo     subfiles\:  igr.exe, cloudflared.exe
 echo ============================================
 echo.
