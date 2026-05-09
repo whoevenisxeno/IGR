@@ -895,23 +895,23 @@ DASHBOARD_HTML = r'''
         }
         .login-box {
             background: #0f0a1a;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 8px;
             padding: 50px;
             text-align: center;
-            box-shadow: 0 0 40px rgba(168, 85, 247, 0.3);
+            box-shadow: 0 0 40px rgba(124, 58, 237, 0.2);
         }
         .login-title {
             font-size: 42px;
-            color: #a855f7;
-            text-shadow: 0 0 20px #a855f7;
+            color: #7c3aed;
+            text-shadow: 0 0 15px rgba(124, 58, 237, 0.5);
             margin-bottom: 40px;
         }
         .login-input {
             width: 300px;
             padding: 14px 18px;
             background: #0a0a0a;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 4px;
             color: #c084fc;
             font-family: 'Courier New', monospace;
@@ -920,7 +920,7 @@ DASHBOARD_HTML = r'''
         }
         .login-btn {
             padding: 14px 50px;
-            background: #a855f7;
+            background: #7c3aed;
             color: #000;
             border: none;
             border-radius: 4px;
@@ -929,7 +929,7 @@ DASHBOARD_HTML = r'''
             font-weight: bold;
             cursor: pointer;
         }
-        .login-btn:hover { box-shadow: 0 0 25px #a855f7; }
+        .login-btn:hover { box-shadow: 0 0 20px rgba(124, 58, 237, 0.4); }
         .login-error { color: #ef4444; margin-top: 20px; font-size: 14px; display: none; }
         
         /* Main Layout */
@@ -941,7 +941,7 @@ DASHBOARD_HTML = r'''
             width: 260px;
             min-width: 260px;
             background: #0a0a0f;
-            border-right: 2px solid #a855f7;
+            border-right: 2px solid #7c3aed;
             height: 100vh;
             overflow-y: auto;
             display: flex;
@@ -958,7 +958,7 @@ DASHBOARD_HTML = r'''
         .sidebar.collapsed .sidebar-header { justify-content: center; padding: 18px; }
         .sidebar-header {
             padding: 25px;
-            border-bottom: 2px solid #a855f7;
+            border-bottom: 2px solid #7c3aed;
             text-align: center;
             display: flex;
             align-items: center;
@@ -967,13 +967,13 @@ DASHBOARD_HTML = r'''
         .sidebar-logo {
             font-size: 28px;
             font-weight: bold;
-            color: #a855f7;
-            text-shadow: 0 0 15px #a855f7;
+            color: #7c3aed;
+            text-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
         }
         .sidebar-toggle {
             background: none;
             border: none;
-            color: #a855f7;
+            color: #7c3aed;
             font-size: 20px;
             cursor: pointer;
             padding: 5px;
@@ -990,8 +990,8 @@ DASHBOARD_HTML = r'''
             gap: 15px;
             font-size: 15px;
         }
-        .nav-item:hover { background: rgba(168, 85, 247, 0.1); border-left-color: #a855f7; }
-        .nav-item.active { background: rgba(168, 85, 247, 0.2); border-left-color: #a855f7; color: #fff; }
+        .nav-item:hover { background: rgba(124, 58, 237, 0.08); border-left-color: #7c3aed; }
+        .nav-item.active { background: rgba(124, 58, 237, 0.15); border-left-color: #7c3aed; color: #fff; }
         .nav-icon { 
             font-size: 18px; 
             width: 28px; 
@@ -1022,18 +1022,18 @@ DASHBOARD_HTML = r'''
         }
         .info-card {
             background: #0f0a1a;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 8px;
             padding: 25px;
             text-align: center;
         }
         .info-label { font-size: 13px; color: #888; text-transform: uppercase; margin-bottom: 10px; }
-        .info-value { font-size: 22px; color: #a855f7; font-weight: bold; }
+        .info-value { font-size: 22px; color: #7c3aed; font-weight: bold; }
         
         /* Section */
         .section {
             background: #0f0a1a;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 8px;
             padding: 25px;
             margin-bottom: 25px;
@@ -1052,14 +1052,14 @@ DASHBOARD_HTML = r'''
             padding-bottom: 15px;
             border-bottom: 1px solid #2a1a3a;
         }
-        .section-title { font-size: 18px; font-weight: bold; color: #a855f7; text-transform: uppercase; }
+        .section-title { font-size: 18px; font-weight: bold; color: #7c3aed; text-transform: uppercase; }
         .section-header > div { display: flex; gap: 8px; flex-wrap: wrap; }
         
         /* Buttons */
         .btn {
             background: transparent;
-            color: #a855f7;
-            border: 2px solid #a855f7;
+            color: #7c3aed;
+            border: 2px solid #7c3aed;
             padding: 12px 24px;
             border-radius: 4px;
             cursor: pointer;
@@ -1069,8 +1069,8 @@ DASHBOARD_HTML = r'''
             transition: all 0.3s;
             margin: 5px;
         }
-        .btn:hover { background: #a855f7; color: #000; box-shadow: 0 0 20px #a855f7; }
-        .btn.active { background: #a855f7; color: #000; }
+        .btn:hover { background: #7c3aed; color: #000; box-shadow: 0 0 15px rgba(124, 58, 237, 0.4); }
+        .btn.active { background: #7c3aed; color: #000; }
         .btn.danger { border-color: #ef4444; color: #ef4444; }
         .btn.danger:hover { background: #ef4444; color: #000; }
         .btn.small { padding: 8px 16px; font-size: 13px; }
@@ -1078,7 +1078,7 @@ DASHBOARD_HTML = r'''
         /* Inputs */
         input, select, textarea {
             background: #0a0a0a;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 4px;
             padding: 12px 16px;
             color: #c084fc;
@@ -1087,12 +1087,12 @@ DASHBOARD_HTML = r'''
             width: 100%;
             margin-bottom: 12px;
         }
-        input:focus, select:focus { outline: none; box-shadow: 0 0 15px #a855f7; }
+        input:focus, select:focus { outline: none; box-shadow: 0 0 10px rgba(124, 58, 237, 0.3); }
         
         /* Log Box */
         .log-box {
             background: #050505;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 6px;
             padding: 15px;
             min-height: 200px;
@@ -1106,7 +1106,7 @@ DASHBOARD_HTML = r'''
         /* Stream Box */
         .stream-box {
             background: #050505;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 8px;
             min-height: 400px;
             flex: 1;
@@ -1150,7 +1150,7 @@ DASHBOARD_HTML = r'''
         .file-path-bar input { flex: 1; }
         .file-list {
             background: #050505;
-            border: 2px solid #a855f7;
+            border: 2px solid #7c3aed;
             border-radius: 6px;
             flex: 1;
             overflow-y: auto;
@@ -1163,9 +1163,9 @@ DASHBOARD_HTML = r'''
             align-items: center;
             gap: 12px;
         }
-        .file-item:hover { background: rgba(168, 85, 247, 0.1); }
+        .file-item:hover { background: rgba(124, 58, 237, 0.08); }
         .file-item:last-child { border-bottom: none; }
-        .file-icon { color: #a855f7; }
+        .file-icon { color: #7c3aed; }
         
         /* Mobile */
         @media (max-width: 768px) {
@@ -1222,7 +1222,7 @@ DASHBOARD_HTML = r'''
         /* Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0a0a0f; }
-        ::-webkit-scrollbar-thumb { background: #a855f7; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #7c3aed; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -2148,7 +2148,7 @@ def _make_tk_popup(p_title: str, p_text: str, p_type: str, x: int = -1, y: int =
                 time.sleep(0.05)
                 threading.Thread(target=_make_tk_popup, args=(p_title, p_text, p_type), daemon=True).start()
         btn = tk.Button(btn_frame, text="OK", command=on_ok, width=10,
-                        bg='#a855f7', fg='white', font=('Segoe UI', 10, 'bold'),
+                        bg='#7c3aed', fg='white', font=('Segoe UI', 10, 'bold'),
                         relief='flat', cursor='hand2')
         btn.pack()
     elif p_type == 'hydra':
@@ -2168,7 +2168,7 @@ def _make_tk_popup(p_title: str, p_text: str, p_type: str, x: int = -1, y: int =
         btn.pack()
     else:
         btn = tk.Button(btn_frame, text="OK", command=root.destroy, width=10,
-                        bg='#a855f7', fg='white', font=('Segoe UI', 10, 'bold'),
+                        bg='#7c3aed', fg='white', font=('Segoe UI', 10, 'bold'),
                         relief='flat', cursor='hand2')
         btn.pack()
     
