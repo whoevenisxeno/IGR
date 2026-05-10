@@ -34,15 +34,13 @@ echo   IGR v%IGR_VERSION% Build - USB Stick Mode
 echo ============================================
 echo.
 
-REM Ask for configuration values
+REM Check if saved config exists and handle it via PowerShell
 echo [1/6] Configuration
 echo.
-
-REM Check if saved config exists
 if not exist config.txt goto :usb_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do echo     %%a: %%b
+powershell -Command "Get-Content config.txt | ForEach-Object { $parts = $_ -split '=',2; Write-Host ('     ' + $parts[0] + ': ' + $parts[1]) }"
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :usb_load_config
@@ -83,13 +81,9 @@ if not defined DASHBOARD_PASSWORD echo   WARNING: DASHBOARD_PASSWORD is empty.
 
 echo   Config ready.
 
-REM Save config for next time
-echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%> config.txt
-echo DISCORD_USERNAME=%DISCORD_USERNAME%>> config.txt
-echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%>> config.txt
-echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%>> config.txt
-echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%>> config.txt
-echo UPDATE_URL=%UPDATE_URL%>> config.txt
+REM Save config for next time using PowerShell to handle special chars
+powershell -Command ^
+    "@{DISCORD_WEBHOOK='%DISCORD_WEBHOOK%';DISCORD_USERNAME='%DISCORD_USERNAME%';DASHBOARD_PASSWORD='%DASHBOARD_PASSWORD%';TELEGRAM_BOT_TOKEN='%TELEGRAM_BOT_TOKEN%';TELEGRAM_CHAT_ID='%TELEGRAM_CHAT_ID%';UPDATE_URL='%UPDATE_URL%'}.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value } | Set-Content config.txt"
 echo   Configuration saved to config.txt for next build.
 goto :usb_config_done
 
@@ -278,15 +272,13 @@ echo   IGR v%IGR_VERSION% Build - EXE Bind Mode
 echo ============================================
 echo.
 
-REM Ask for configuration values
+REM Check if saved config exists and handle it via PowerShell
 echo [1/7] Configuration
 echo.
-
-REM Check if saved config exists
 if not exist config.txt goto :bind_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do echo     %%a: %%b
+powershell -Command "Get-Content config.txt | ForEach-Object { $parts = $_ -split '=',2; Write-Host ('     ' + $parts[0] + ': ' + $parts[1]) }"
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :bind_load_config
@@ -322,13 +314,9 @@ if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
 
 echo   Config ready.
 
-REM Save config for next time
-echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%> config.txt
-echo DISCORD_USERNAME=%DISCORD_USERNAME%>> config.txt
-echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%>> config.txt
-echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%>> config.txt
-echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%>> config.txt
-echo UPDATE_URL=%UPDATE_URL%>> config.txt
+REM Save config for next time using PowerShell to handle special chars
+powershell -Command ^
+    "@{DISCORD_WEBHOOK='%DISCORD_WEBHOOK%';DISCORD_USERNAME='%DISCORD_USERNAME%';DASHBOARD_PASSWORD='%DASHBOARD_PASSWORD%';TELEGRAM_BOT_TOKEN='%TELEGRAM_BOT_TOKEN%';TELEGRAM_CHAT_ID='%TELEGRAM_CHAT_ID%';UPDATE_URL='%UPDATE_URL%'}.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value } | Set-Content config.txt"
 echo   Configuration saved to config.txt for next build.
 goto :bind_config_done
 
