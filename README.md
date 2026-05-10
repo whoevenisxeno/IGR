@@ -345,13 +345,6 @@ imagine/
 ```
 
 ---
-
-## Credits
-
-Built by [whoevenisxeno](https://github.com/whoevenisxeno) with [Cascade](https://codeium.com/cascade) as the AI pair programmer.
-
----
-
 ## Disclaimer
 
 This project is for educational and authorized testing purposes only. Unauthorized access to computer systems is illegal. Use responsibly and only on systems you own or have explicit permission to test.
