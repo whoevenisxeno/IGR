@@ -117,7 +117,7 @@ Build.bat will:
 - Ask for injection method: USB Stick or EXE Bind
 - Ask for exe icon: Python default, blank, or IGR logo
 - Ask for credentials (Discord webhook, Telegram token, dashboard password, etc.)
-- Inject credentials into a build copy of main.py
+- Inject credentials into a build copy of files/main.py
 - Install all Python dependencies
 - Download cloudflared.exe if not present
 - Build with PyInstaller → `dist\igr_v7.2.exe`
@@ -152,7 +152,7 @@ Instead of USB deployment, IGR can be merged into any legitimate `.exe` file. Wh
 ### How it works
 1. `build.bat` → choose method **[2] EXE Bind**
 2. Drag and drop a legitimate `.exe` into the terminal (e.g. a game installer, utility)
-3. `stub.py` is compiled into a dropper, `binder.py` merges all three into one exe
+3. `files/stub.py` is compiled into a dropper, `files/binder.py` merges all three into one exe
 4. The bound exe has this format:
    ```
    [stub.exe][legit.exe][igr.exe][legit_size:8][igr_size:8][IGR_BIND magic]
@@ -164,8 +164,8 @@ Instead of USB deployment, IGR can be merged into any legitimate `.exe` file. Wh
    - Launches IGR silently in the background
 
 ### Files
-- `stub.py` — Dropper/loader that extracts and runs both payloads
-- `binder.py` — Merges stub + legit exe + IGR exe into bound output
+- `files/stub.py` — Dropper/loader that extracts and runs both payloads
+- `files/binder.py` — Merges stub + legit exe + IGR exe into bound output
 
 ---
 
@@ -191,7 +191,7 @@ Click the red PANIC button on the Stealth page. Double confirmation. Removes:
 
 ## Cleanup
 
-Run `cleanup.bat` on the target machine to remove all traces manually.
+Run `files/cleanup.bat` on the target machine to remove all traces manually.
 
 ---
 
@@ -305,7 +305,7 @@ All commands are sent in your Telegram chat with the bot:
 - **Webhook URL post** - Sends dashboard URL on startup
 
 ### Injection & Spreading
-- **USB stick deployment** - Classic manual deploy via USB with setup.bat
+- **USB stick deployment** - Classic manual deploy via USB with files/setup.bat
 - **EXE bind mode** - Merge IGR into any legitimate .exe - victim sees the real program, IGR installs silently
 - **USB autorun** - Copy IGR to all USB drives with autorun.inf + VBS launcher + hidden shortcut
 - **LAN worm** - Scan subnet, attempt SMB copy to C$/ADMIN$ shares with startup persistence
@@ -371,14 +371,17 @@ All commands are sent in your Telegram chat with the bot:
 
 ```
 imagine/
-├── main.py              # Main application (single file - all backend + dashboard HTML/CSS/JS)
-├── stub.py              # EXE bind dropper - extracts and runs both payloads
-├── binder.py            # EXE bind tool - merges stub + legit exe + IGR exe
 ├── build.bat            # Build script (PyInstaller) + USB/EXE bind + deployment
-├── setup.bat            # USB deployment / install script (runs on target)
-├── cleanup.bat          # Remove all traces from target
-├── logos/               # Logo assets
-└── README.md
+├── README.md            # This file
+└── files/
+    ├── main.py          # Main application (single file - all backend + dashboard HTML/CSS/JS)
+    ├── stub.py          # EXE bind dropper - extracts and runs both payloads
+    ├── binder.py        # EXE bind tool - merges stub + legit exe + IGR exe
+    ├── setup.bat        # USB deployment / install script (runs on target)
+    ├── cleanup.bat      # Remove all traces from target
+    ├── save_config.ps1  # Config save/load helper for build.bat
+    ├── blank.ico        # Default blank icon for builds
+    └── logos/           # Logo assets
 ```
 
 ---
