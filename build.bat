@@ -103,15 +103,7 @@ echo [2/6] Injecting configuration (encrypted)...
 copy /y "files\main.py" "main_build.py" >nul
 
 REM Base64-encode sensitive values so they are not plaintext in the exe
-powershell -Command ^
-    "$dw=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_WEBHOOK%')); ^
-     $du=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_USERNAME%')); ^
-     $dp=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DASHBOARD_PASSWORD%')); ^
-     $tt=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_BOT_TOKEN%')); ^
-     $tc=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_CHAT_ID%')); ^
-     $uu=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%UPDATE_URL%')); ^
-     $ek=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('igr_enc_key_2024')); ^
-     (Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', ('ENC:'+^$dw) -replace 'BUILD_DISCORD_USERNAME', ('ENC:'+^$du) -replace 'BUILD_DASHBOARD_PASSWORD', ('ENC:'+^$dp) -replace 'BUILD_TELEGRAM_BOT_TOKEN', ('ENC:'+^$tt) -replace 'BUILD_TELEGRAM_CHAT_ID', ('ENC:'+^$tc) -replace 'BUILD_UPDATE_URL', ('ENC:'+^$uu) -replace 'BUILD_ENCRYPTION_KEY', ('ENC:'+^$ek) | Set-Content 'main_build.py' -NoNewline"
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 inject
 
 echo   Values encrypted and injected.
 
@@ -337,15 +329,7 @@ echo [2/7] Injecting configuration (encrypted)...
 copy /y "files\main.py" "main_build.py" >nul
 
 REM Base64-encode sensitive values so they are not plaintext in the exe
-powershell -Command ^
-    "$dw=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_WEBHOOK%')); ^
-     $du=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DISCORD_USERNAME%')); ^
-     $dp=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%DASHBOARD_PASSWORD%')); ^
-     $tt=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_BOT_TOKEN%')); ^
-     $tc=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%TELEGRAM_CHAT_ID%')); ^
-     $uu=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('%UPDATE_URL%')); ^
-     $ek=[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('igr_enc_key_2024')); ^
-     (Get-Content 'main_build.py' -Raw) -replace 'BUILD_DISCORD_WEBHOOK', ('ENC:'+^$dw) -replace 'BUILD_DISCORD_USERNAME', ('ENC:'+^$du) -replace 'BUILD_DASHBOARD_PASSWORD', ('ENC:'+^$dp) -replace 'BUILD_TELEGRAM_BOT_TOKEN', ('ENC:'+^$tt) -replace 'BUILD_TELEGRAM_CHAT_ID', ('ENC:'+^$tc) -replace 'BUILD_UPDATE_URL', ('ENC:'+^$uu) -replace 'BUILD_ENCRYPTION_KEY', ('ENC:'+^$ek) | Set-Content 'main_build.py' -NoNewline"
+powershell -ExecutionPolicy Bypass -File files\save_config.ps1 inject
 
 echo   Values encrypted and injected.
 
