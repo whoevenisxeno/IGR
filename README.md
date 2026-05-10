@@ -1,6 +1,6 @@
 # IGR v7.2
 
-<p align="center"><img src="logos/igr-logo2.png" width="200"></p>
+<p align="center"><img src="files/logos/igr-logo2.png" width="200"></p>
 
 Silent auto-start remote access tool for Windows. Deploys via USB stick or EXE binding, starts before login, and exposes a full-featured web dashboard through a Cloudflared tunnel.
 
