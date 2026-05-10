@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 REM Read version from main.py
 set "IGR_VERSION="
-for /f "tokens=2 delims==\"" %%v in ('findstr /c:"IGR_VERSION" main.py 2^>nul') do set "IGR_VERSION=%%~v"
+for /f %%v in ('python -c "import re;m=re.search(r'IGR_VERSION\s*=\s*[\x22\x27]([^\x22\x27]+)',open('main.py').read());print(m.group(1) if m else '6')"') do set "IGR_VERSION=%%v"
 if not defined IGR_VERSION set "IGR_VERSION=6"
 echo ============================================
 echo   IGR v%IGR_VERSION% Build - Compiling executable
