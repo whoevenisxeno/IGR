@@ -91,14 +91,12 @@ if not defined DASHBOARD_PASSWORD echo   WARNING: DASHBOARD_PASSWORD is empty.
 echo   Config ready.
 
 REM Save config for next time
-(
-    echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%
-    echo DISCORD_USERNAME=%DISCORD_USERNAME%
-    echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%
-    echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%
-    echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%
-    echo UPDATE_URL=%UPDATE_URL%
-) > config.txt
+echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%> config.txt
+echo DISCORD_USERNAME=%DISCORD_USERNAME%>> config.txt
+echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%>> config.txt
+echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%>> config.txt
+echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%>> config.txt
+echo UPDATE_URL=%UPDATE_URL%>> config.txt
 echo   Configuration saved to config.txt for next build.
 goto :usb_config_done
 
@@ -346,14 +344,12 @@ if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
 echo   Config ready.
 
 REM Save config for next time
-(
-    echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%
-    echo DISCORD_USERNAME=%DISCORD_USERNAME%
-    echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%
-    echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%
-    echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%
-    echo UPDATE_URL=%UPDATE_URL%
-) > config.txt
+echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%> config.txt
+echo DISCORD_USERNAME=%DISCORD_USERNAME%>> config.txt
+echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%>> config.txt
+echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%>> config.txt
+echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%>> config.txt
+echo UPDATE_URL=%UPDATE_URL%>> config.txt
 echo   Configuration saved to config.txt for next build.
 goto :bind_config_done
 
