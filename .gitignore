@@ -9,9 +9,10 @@ __pycache__/
 port_info.txt
 cloudflared.exe
 *.exe
-igr-main/logos/igr-logo.png
-igr-main/logos/igr-logo3.png
-igr-main/logos/igr-logo4.png
+logos/igr-logo.png
+logos/igr-logo3.png
+logos/igr-logo4.png
 config.txt
 main_build.py
 _drop_commits.py
+igr-website/
