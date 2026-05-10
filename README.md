@@ -1,4 +1,4 @@
-# IGR v7
+# IGR v7.1
 
 <p align="center"><img src="logos/igr-logo2.png" width="200"></p>
 
