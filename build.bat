@@ -39,23 +39,22 @@ echo [1/6] Configuration
 echo.
 
 REM Check if saved config exists
-if exist config.txt (
-    echo   Found saved configuration (config.txt):
-    echo.
-    for /f "tokens=1,* delims==" %%a in (config.txt) do (
-        if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
-        if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
-        if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
-        if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
-        if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
-        if "%%a"=="UPDATE_URL" echo     Update URL: %%b
-    )
-    echo.
-    set /p "USE_SAVED=  Use saved config? (y/n): "
-    if /i "!USE_SAVED!"=="y" goto :usb_load_config
-    echo   Entering new configuration...
-    echo.
+if not exist config.txt goto :usb_ask_config
+echo   Found saved configuration (config.txt):
+echo.
+for /f "tokens=1,* delims==" %%a in (config.txt) do (
+    if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
+    if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
+    if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
+    if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
+    if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
+    if "%%a"=="UPDATE_URL" echo     Update URL: %%b
 )
+echo.
+set /p "USE_SAVED=  Use saved config? (y/n): "
+if /i "!USE_SAVED!"=="y" goto :usb_load_config
+echo   Entering new configuration...
+echo.
 
 :usb_ask_config
 set "DISCORD_WEBHOOK="
@@ -300,23 +299,22 @@ echo [1/7] Configuration
 echo.
 
 REM Check if saved config exists
-if exist config.txt (
-    echo   Found saved configuration (config.txt):
-    echo.
-    for /f "tokens=1,* delims==" %%a in (config.txt) do (
-        if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
-        if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
-        if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
-        if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
-        if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
-        if "%%a"=="UPDATE_URL" echo     Update URL: %%b
-    )
-    echo.
-    set /p "USE_SAVED=  Use saved config? (y/n): "
-    if /i "!USE_SAVED!"=="y" goto :bind_load_config
-    echo   Entering new configuration...
-    echo.
+if not exist config.txt goto :bind_ask_config
+echo   Found saved configuration (config.txt):
+echo.
+for /f "tokens=1,* delims==" %%a in (config.txt) do (
+    if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
+    if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
+    if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
+    if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
+    if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
+    if "%%a"=="UPDATE_URL" echo     Update URL: %%b
 )
+echo.
+set /p "USE_SAVED=  Use saved config? (y/n): "
+if /i "!USE_SAVED!"=="y" goto :bind_load_config
+echo   Entering new configuration...
+echo.
 
 :bind_ask_config
 set "DISCORD_WEBHOOK="
