@@ -34,34 +34,22 @@ echo   IGR v%IGR_VERSION% Build - USB Stick Mode
 echo ============================================
 echo.
 
-REM Check for config.txt
-if not exist "config.txt" (
-    echo ERROR: config.txt not found!
-    echo   Copy config.example.txt to config.txt and fill in your values.
-    pause
-    exit /b 1
-)
-
-REM Read config.txt values
-echo [1/6] Reading config.txt...
+REM Ask for configuration values
+echo [1/6] Configuration
+echo.
 set "DISCORD_WEBHOOK="
+set /p "DISCORD_WEBHOOK=  Discord Webhook URL (leave blank to skip): "
 set "DISCORD_USERNAME=IGR"
+set /p "DISCORD_USERNAME=  Discord Bot Name [%DISCORD_USERNAME%]: "
+if "%DISCORD_USERNAME%"=="" set "DISCORD_USERNAME=IGR"
 set "DASHBOARD_PASSWORD="
+set /p "DASHBOARD_PASSWORD=  Dashboard Password: "
 set "TELEGRAM_BOT_TOKEN="
+set /p "TELEGRAM_BOT_TOKEN=  Telegram Bot Token (leave blank to skip): "
 set "TELEGRAM_CHAT_ID="
+set /p "TELEGRAM_CHAT_ID=  Telegram Chat ID (leave blank to skip): "
 set "UPDATE_URL="
-
-for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do (
-    set "line=%%a"
-    if not "!line:~0,1!"=="#" (
-        if "%%a"=="DISCORD_WEBHOOK" set "DISCORD_WEBHOOK=%%b"
-        if "%%a"=="DISCORD_USERNAME" set "DISCORD_USERNAME=%%b"
-        if "%%a"=="DASHBOARD_PASSWORD" set "DASHBOARD_PASSWORD=%%b"
-        if "%%a"=="TELEGRAM_BOT_TOKEN" set "TELEGRAM_BOT_TOKEN=%%b"
-        if "%%a"=="TELEGRAM_CHAT_ID" set "TELEGRAM_CHAT_ID=%%b"
-        if "%%a"=="UPDATE_URL" set "UPDATE_URL=%%b"
-    )
-)
+set /p "UPDATE_URL=  Self-Update URL (leave blank to skip): "
 
 REM Validate: at least 1 of Discord or Telegram must be configured
 set "HAS_DISCORD=0"
@@ -70,8 +58,8 @@ if defined DISCORD_WEBHOOK set "HAS_DISCORD=1"
 if defined TELEGRAM_BOT_TOKEN if defined TELEGRAM_CHAT_ID set "HAS_TELEGRAM=1"
 
 if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
-    echo ERROR: At least Discord or Telegram must be configured in config.txt!
-    echo   Set DISCORD_WEBHOOK or TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID.
+    echo.
+    echo ERROR: At least Discord webhook or Telegram bot token + chat ID required!
     pause
     exit /b 1
 )
@@ -80,7 +68,7 @@ if "%HAS_DISCORD%"=="0" echo   NOTE: Discord not configured, using Telegram only
 if "%HAS_TELEGRAM%"=="0" echo   NOTE: Telegram not configured, using Discord only.
 if not defined DASHBOARD_PASSWORD echo   WARNING: DASHBOARD_PASSWORD is empty.
 
-echo   Config loaded.
+echo   Config ready.
 
 REM Create build copy of main.py with injected values
 echo.
@@ -251,34 +239,22 @@ echo   IGR v%IGR_VERSION% Build - EXE Bind Mode
 echo ============================================
 echo.
 
-REM Check for config.txt
-if not exist "config.txt" (
-    echo ERROR: config.txt not found!
-    echo   Copy config.example.txt to config.txt and fill in your values.
-    pause
-    exit /b 1
-)
-
-REM Read config.txt values
-echo [1/7] Reading config.txt...
+REM Ask for configuration values
+echo [1/7] Configuration
+echo.
 set "DISCORD_WEBHOOK="
+set /p "DISCORD_WEBHOOK=  Discord Webhook URL (leave blank to skip): "
 set "DISCORD_USERNAME=IGR"
+set /p "DISCORD_USERNAME=  Discord Bot Name [%DISCORD_USERNAME%]: "
+if "%DISCORD_USERNAME%"=="" set "DISCORD_USERNAME=IGR"
 set "DASHBOARD_PASSWORD="
+set /p "DASHBOARD_PASSWORD=  Dashboard Password: "
 set "TELEGRAM_BOT_TOKEN="
+set /p "TELEGRAM_BOT_TOKEN=  Telegram Bot Token (leave blank to skip): "
 set "TELEGRAM_CHAT_ID="
+set /p "TELEGRAM_CHAT_ID=  Telegram Chat ID (leave blank to skip): "
 set "UPDATE_URL="
-
-for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do (
-    set "line=%%a"
-    if not "!line:~0,1!"=="#" (
-        if "%%a"=="DISCORD_WEBHOOK" set "DISCORD_WEBHOOK=%%b"
-        if "%%a"=="DISCORD_USERNAME" set "DISCORD_USERNAME=%%b"
-        if "%%a"=="DASHBOARD_PASSWORD" set "DASHBOARD_PASSWORD=%%b"
-        if "%%a"=="TELEGRAM_BOT_TOKEN" set "TELEGRAM_BOT_TOKEN=%%b"
-        if "%%a"=="TELEGRAM_CHAT_ID" set "TELEGRAM_CHAT_ID=%%b"
-        if "%%a"=="UPDATE_URL" set "UPDATE_URL=%%b"
-    )
-)
+set /p "UPDATE_URL=  Self-Update URL (leave blank to skip): "
 
 set "HAS_DISCORD=0"
 set "HAS_TELEGRAM=0"
@@ -286,12 +262,13 @@ if defined DISCORD_WEBHOOK set "HAS_DISCORD=1"
 if defined TELEGRAM_BOT_TOKEN if defined TELEGRAM_CHAT_ID set "HAS_TELEGRAM=1"
 
 if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
-    echo ERROR: At least Discord or Telegram must be configured in config.txt!
+    echo.
+    echo ERROR: At least Discord webhook or Telegram bot token + chat ID required!
     pause
     exit /b 1
 )
 
-echo   Config loaded.
+echo   Config ready.
 
 REM Inject config into main.py
 echo.

