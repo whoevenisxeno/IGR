@@ -1,5 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
+REM Change to script directory so relative paths work
+cd /d "%~dp0"
+
 REM Read version from main.py
 set "IGR_VERSION="
 for /f %%v in ('python -c "import re;m=re.search(r'IGR_VERSION\s*=\s*[\x22\x27]([^\x22\x27]+)',open('files/main.py').read());print(m.group(1) if m else '6')"') do set "IGR_VERSION=%%v"
