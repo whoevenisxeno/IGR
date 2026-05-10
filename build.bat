@@ -98,6 +98,9 @@ if not exist cloudflared.exe (
 )
 
 echo.
+if exist "build" rd /s /q "build" 2>nul
+if exist "dist" rd /s /q "dist" 2>nul
+del /q *.spec 2>nul
 echo [5/6] Compiling igr_v%IGR_VERSION%.exe...
 python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --clean --noconfirm ^
     --hidden-import flask ^
@@ -297,6 +300,9 @@ echo   Done.
 
 REM Compile IGR exe
 echo.
+if exist "build" rd /s /q "build" 2>nul
+if exist "dist" rd /s /q "dist" 2>nul
+del /q *.spec 2>nul
 echo [4/7] Compiling igr_v%IGR_VERSION%.exe...
 python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% --clean --noconfirm ^
     --hidden-import flask ^
