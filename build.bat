@@ -84,13 +84,7 @@ if not defined DASHBOARD_PASSWORD echo   WARNING: DASHBOARD_PASSWORD is empty.
 
 echo   Config ready.
 
-REM Save config for next time via temp file (avoids batch special char issues)
-echo DISCORD_WEBHOOK=!DISCORD_WEBHOOK!> _save_args.txt
-echo DISCORD_USERNAME=!DISCORD_USERNAME!>> _save_args.txt
-echo DASHBOARD_PASSWORD=!DASHBOARD_PASSWORD!>> _save_args.txt
-echo TELEGRAM_BOT_TOKEN=!TELEGRAM_BOT_TOKEN!>> _save_args.txt
-echo TELEGRAM_CHAT_ID=!TELEGRAM_CHAT_ID!>> _save_args.txt
-if defined UPDATE_URL (echo UPDATE_URL=!UPDATE_URL!>> _save_args.txt) else (echo UPDATE_URL=>> _save_args.txt)
+REM Save config for next time (PowerShell reads env vars directly)
 powershell -ExecutionPolicy Bypass -File files\save_config.ps1 save
 echo   Configuration saved to config.txt for next build.
 goto :usb_config_done
@@ -324,13 +318,7 @@ if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
 
 echo   Config ready.
 
-REM Save config for next time via temp file (avoids batch special char issues)
-echo DISCORD_WEBHOOK=!DISCORD_WEBHOOK!> _save_args.txt
-echo DISCORD_USERNAME=!DISCORD_USERNAME!>> _save_args.txt
-echo DASHBOARD_PASSWORD=!DASHBOARD_PASSWORD!>> _save_args.txt
-echo TELEGRAM_BOT_TOKEN=!TELEGRAM_BOT_TOKEN!>> _save_args.txt
-echo TELEGRAM_CHAT_ID=!TELEGRAM_CHAT_ID!>> _save_args.txt
-if defined UPDATE_URL (echo UPDATE_URL=!UPDATE_URL!>> _save_args.txt) else (echo UPDATE_URL=>> _save_args.txt)
+REM Save config for next time (PowerShell reads env vars directly)
 powershell -ExecutionPolicy Bypass -File files\save_config.ps1 save
 echo   Configuration saved to config.txt for next build.
 goto :bind_config_done

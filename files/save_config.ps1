@@ -1,26 +1,12 @@
 param([string]$Mode)
 
 if ($Mode -eq 'save') {
-    if (Test-Path '_save_args.txt') {
-        $config = @{}
-        Get-Content '_save_args.txt' | ForEach-Object {
-            $parts = $_ -split '=', 2
-            if ($parts.Length -eq 2) {
-                $config[$parts[0]] = $parts[1]
-            }
-        }
-        Remove-Item '_save_args.txt' -Force
-    } else {
-        $config = @{}
-        foreach ($arg in $args) {
-            if ($arg -match '^([^=]+)=(.*)$') {
-                $config[$Matches[1]] = $Matches[2]
-            } elseif ($arg -match '^([^=]+)=$') {
-                $config[$Matches[1]] = ''
-            } elseif ($arg -match '^([^=]+)!$') {
-                $config[$Matches[1]] = ''
-            }
-        }
+    $config = @{}
+    $keys = @('DISCORD_WEBHOOK', 'DISCORD_USERNAME', 'DASHBOARD_PASSWORD', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'UPDATE_URL')
+    foreach ($key in $keys) {
+        $val = [System.Environment]::GetEnvironmentVariable($key)
+        if ($null -eq $val) { $val = '' }
+        $config[$key] = $val
     }
     $config.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value } | Set-Content -Path config.txt -Encoding UTF8
 }
