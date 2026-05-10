@@ -3728,22 +3728,27 @@ DASHBOARD_HTML = r'''
         }
         if (localStorage.getItem('igr-theme') === 'light') document.body.classList.add('light-theme');
         let _offlineCheckInterval = null;
+        let _offlineFailCount = 0;
         function startOfflineCheck() {
             _offlineCheckInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/api/status', {method: 'GET', signal: AbortSignal.timeout(5000)});
+                    const res = await fetch('/api/status', {method: 'GET', signal: AbortSignal.timeout(10000)});
                     const data = await res.json();
+                    _offlineFailCount = 0;
                     document.getElementById('offlineBanner').style.display = 'none';
                     const dot = document.getElementById('connDot');
                     if (dot) { dot.className = 'status-dot'; }
                     const label = document.getElementById('connLabel');
                     if (label) label.textContent = 'Connected';
                 } catch {
-                    document.getElementById('offlineBanner').style.display = 'block';
-                    const dot = document.getElementById('connDot');
-                    if (dot) { dot.className = 'status-dot offline'; }
-                    const label = document.getElementById('connLabel');
-                    if (label) label.textContent = 'Offline';
+                    _offlineFailCount++;
+                    if (_offlineFailCount >= 3) {
+                        document.getElementById('offlineBanner').style.display = 'block';
+                        const dot = document.getElementById('connDot');
+                        if (dot) { dot.className = 'status-dot offline'; }
+                        const label = document.getElementById('connLabel');
+                        if (label) label.textContent = 'Offline';
+                    }
                 }
             }, 10000);
         }
