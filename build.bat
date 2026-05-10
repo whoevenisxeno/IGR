@@ -40,7 +40,7 @@ echo.
 if not exist config.txt goto :usb_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-powershell -Command "Get-Content config.txt | ForEach-Object { $parts = $_ -split '=',2; Write-Host ('     ' + $parts[0] + ': ' + $parts[1]) }"
+powershell -ExecutionPolicy Bypass -File save_config.ps1 show
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :usb_load_config
@@ -81,14 +81,21 @@ if not defined DASHBOARD_PASSWORD echo   WARNING: DASHBOARD_PASSWORD is empty.
 
 echo   Config ready.
 
-REM Save config for next time using PowerShell to handle special chars
-powershell -Command ^
-    "@{DISCORD_WEBHOOK='%DISCORD_WEBHOOK%';DISCORD_USERNAME='%DISCORD_USERNAME%';DASHBOARD_PASSWORD='%DASHBOARD_PASSWORD%';TELEGRAM_BOT_TOKEN='%TELEGRAM_BOT_TOKEN%';TELEGRAM_CHAT_ID='%TELEGRAM_CHAT_ID%';UPDATE_URL='%UPDATE_URL%'}.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value } | Set-Content config.txt"
+REM Save config for next time via temp file (avoids batch special char issues)
+echo DISCORD_WEBHOOK=!DISCORD_WEBHOOK!> _save_args.txt
+echo DISCORD_USERNAME=!DISCORD_USERNAME!>> _save_args.txt
+echo DASHBOARD_PASSWORD=!DASHBOARD_PASSWORD!>> _save_args.txt
+echo TELEGRAM_BOT_TOKEN=!TELEGRAM_BOT_TOKEN!>> _save_args.txt
+echo TELEGRAM_CHAT_ID=!TELEGRAM_CHAT_ID!>> _save_args.txt
+if defined UPDATE_URL (echo UPDATE_URL=!UPDATE_URL!>> _save_args.txt) else (echo UPDATE_URL=>> _save_args.txt)
+powershell -ExecutionPolicy Bypass -File save_config.ps1 save
 echo   Configuration saved to config.txt for next build.
 goto :usb_config_done
 
 :usb_load_config
-for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do set "%%a=%%b"
+powershell -ExecutionPolicy Bypass -File save_config.ps1 load
+call _load_config.bat
+del /f /q _load_config.bat >nul 2>&1
 echo   Loaded saved config.
 
 :usb_config_done
@@ -278,7 +285,7 @@ echo.
 if not exist config.txt goto :bind_ask_config
 echo   Found saved configuration (config.txt):
 echo.
-powershell -Command "Get-Content config.txt | ForEach-Object { $parts = $_ -split '=',2; Write-Host ('     ' + $parts[0] + ': ' + $parts[1]) }"
+powershell -ExecutionPolicy Bypass -File save_config.ps1 show
 echo.
 set /p "USE_SAVED=  Use saved config? (y/n): "
 if /i "!USE_SAVED!"=="y" goto :bind_load_config
@@ -314,14 +321,21 @@ if "%HAS_DISCORD%"=="0" if "%HAS_TELEGRAM%"=="0" (
 
 echo   Config ready.
 
-REM Save config for next time using PowerShell to handle special chars
-powershell -Command ^
-    "@{DISCORD_WEBHOOK='%DISCORD_WEBHOOK%';DISCORD_USERNAME='%DISCORD_USERNAME%';DASHBOARD_PASSWORD='%DASHBOARD_PASSWORD%';TELEGRAM_BOT_TOKEN='%TELEGRAM_BOT_TOKEN%';TELEGRAM_CHAT_ID='%TELEGRAM_CHAT_ID%';UPDATE_URL='%UPDATE_URL%'}.GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value } | Set-Content config.txt"
+REM Save config for next time via temp file (avoids batch special char issues)
+echo DISCORD_WEBHOOK=!DISCORD_WEBHOOK!> _save_args.txt
+echo DISCORD_USERNAME=!DISCORD_USERNAME!>> _save_args.txt
+echo DASHBOARD_PASSWORD=!DASHBOARD_PASSWORD!>> _save_args.txt
+echo TELEGRAM_BOT_TOKEN=!TELEGRAM_BOT_TOKEN!>> _save_args.txt
+echo TELEGRAM_CHAT_ID=!TELEGRAM_CHAT_ID!>> _save_args.txt
+if defined UPDATE_URL (echo UPDATE_URL=!UPDATE_URL!>> _save_args.txt) else (echo UPDATE_URL=>> _save_args.txt)
+powershell -ExecutionPolicy Bypass -File save_config.ps1 save
 echo   Configuration saved to config.txt for next build.
 goto :bind_config_done
 
 :bind_load_config
-for /f "usebackq tokens=1,* delims==" %%a in ("config.txt") do set "%%a=%%b"
+powershell -ExecutionPolicy Bypass -File save_config.ps1 load
+call _load_config.bat
+del /f /q _load_config.bat >nul 2>&1
 echo   Loaded saved config.
 
 :bind_config_done

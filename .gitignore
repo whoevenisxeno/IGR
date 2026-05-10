@@ -15,5 +15,7 @@ logos/igr-logo4.png
 config.txt
 main_build.py
 _drop_commits.py
+_load_config.bat
+_save_args.txt
 igr-website/
 desktop.ini
