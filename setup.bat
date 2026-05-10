@@ -1,6 +1,16 @@
 @echo off
 setlocal enabledelayedexpansion
 
+REM Detect versioned exe in subfiles
+set "IGR_EXE="
+for %%f in ("%~dp0subfiles\igr_v*.exe") do set "IGR_EXE=%%~nxf"
+if not defined IGR_EXE if exist "%~dp0subfiles\igr.exe" set "IGR_EXE=igr.exe"
+if not defined IGR_EXE (
+    echo ERROR: No igr exe found in subfiles\
+    pause
+    exit /b 1
+)
+
 REM Try admin elevation - continue without if denied
 set "HAS_ADMIN=0"
 >nul 2>&1 net session && set "HAS_ADMIN=1"
@@ -43,13 +53,13 @@ echo   Logged to: %LOG_FILE%
 REM Check for required files
 echo.
 echo [2/9] Checking files...
-if not exist "%SOURCE_DIR%\igr.exe" (
-    echo   ERROR: igr.exe not found in subfiles\
+if not exist "%SOURCE_DIR%\%IGR_EXE%" (
+    echo   ERROR: %IGR_EXE% not found in subfiles\
     echo   Build it first: run build.bat
     pause
     exit /b 1
 )
-echo   Found: %SOURCE_DIR%\igr.exe
+echo   Found: %SOURCE_DIR%\%IGR_EXE%
 if exist "%SOURCE_DIR%\cloudflared.exe" (
     echo   Found: %SOURCE_DIR%\cloudflared.exe
 ) else (
@@ -72,7 +82,7 @@ echo   Done.
 REM Copy executable
 echo.
 echo [4/9] Copying executable...
-copy "%SOURCE_DIR%\igr.exe" "%INSTALL_DIR%\winruntime.exe"
+copy "%SOURCE_DIR%\%IGR_EXE%" "%INSTALL_DIR%\winruntime.exe"
 if errorlevel 1 (
     echo   ERROR: Failed to copy executable
     pause

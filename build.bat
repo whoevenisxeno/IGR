@@ -186,7 +186,7 @@ if "%USB_MODE%"=="1" (
 echo.
 echo   Copying files to %USB_DRIVE% ...
 if not exist "%USB_DRIVE%\subfiles" mkdir "%USB_DRIVE%\subfiles"
-copy /y "dist\igr_v%IGR_VERSION%.exe" "%USB_DRIVE%\subfiles\igr.exe" >nul
+copy /y "dist\igr_v%IGR_VERSION%.exe" "%USB_DRIVE%\subfiles\igr_v%IGR_VERSION%.exe" >nul
 copy /y "cloudflared.exe" "%USB_DRIVE%\subfiles\cloudflared.exe" >nul
 copy /y "setup.bat" "%USB_DRIVE%\setup.bat" >nul
 echo   Done.
