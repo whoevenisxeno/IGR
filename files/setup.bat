@@ -76,6 +76,7 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 REM Kill any running instance before overwriting
 echo   Stopping any running instance...
 taskkill /f /im winruntime.exe >nul 2>&1
+taskkill /f /im cloudflared.exe >nul 2>&1
 timeout /t 2 /nobreak >nul 2>&1
 echo   Done.
 
@@ -93,8 +94,12 @@ echo   Done.
 REM Copy cloudflared if present
 if exist "%SOURCE_DIR%\cloudflared.exe" (
     echo   Copying cloudflared.exe...
-    copy "%SOURCE_DIR%\cloudflared.exe" "%INSTALL_DIR%\cloudflared.exe"
-    echo   Done.
+    copy /y "%SOURCE_DIR%\cloudflared.exe" "%INSTALL_DIR%\cloudflared.exe" >nul 2>&1
+    if errorlevel 1 (
+        echo   WARNING: cloudflared.exe locked by running process - will be updated on next start
+    ) else (
+        echo   Done.
+    )
 )
 
 REM Create VBS launcher (completely invisible - no window flash at all)
