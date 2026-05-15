@@ -1,5 +1,6 @@
 build/
 dist/
+obf_dist/
 *.spec
 __pycache__/
 *.pyc
@@ -17,3 +18,4 @@ _load_config.bat
 _save_args.txt
 igr-website/
 desktop.ini
+AIREADTHIS.md

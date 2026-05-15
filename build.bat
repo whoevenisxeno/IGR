@@ -146,6 +146,29 @@ if not exist cloudflared.exe (
 
 echo.
 echo [5/6] Compiling igr_v%IGR_VERSION%.exe...
+set "PYARMOR_OK=0"
+set "BUILD_SRC=main_build.py"
+set "EXTRA_PYARMOR_FLAGS="
+if "%FEAT_OBFUSCATION%"=="1" (
+    echo   PyArmor obfuscation enabled - installing pyarmor...
+    pip install pyarmor >nul 2>&1
+    if exist obf_dist rd /s /q obf_dist >nul 2>&1
+    pyarmor gen -O obf_dist main_build.py >nul 2>&1
+    if exist "obf_dist\main_build.py" (
+        set "PYARMOR_OK=1"
+        set "BUILD_SRC=obf_dist\main_build.py"
+        for /d %%d in ("obf_dist\pyarmor_runtime_*") do set "RUNTIME_PKG=%%~nxd"
+        if defined RUNTIME_PKG (
+            set "EXTRA_PYARMOR_FLAGS=--paths obf_dist --collect-all !RUNTIME_PKG!"
+        ) else (
+            set "EXTRA_PYARMOR_FLAGS=--paths obf_dist"
+        )
+        echo   PyArmor obfuscation applied.
+    ) else (
+        echo   WARNING: PyArmor obfuscation failed - building without obfuscation.
+        set "BUILD_SRC=main_build.py"
+    )
+)
 python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG% --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
@@ -159,10 +182,12 @@ python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG
     --hidden-import cryptography ^
     --hidden-import cryptography.hazmat.primitives.ciphers.aead ^
     --hidden-import sqlite3 ^
-    main_build.py
+    %EXTRA_PYARMOR_FLAGS% ^
+    %BUILD_SRC%
 
-REM Clean up build copy
+REM Clean up build artifacts
 del /f /q "main_build.py" >nul 2>&1
+if exist obf_dist rd /s /q obf_dist >nul 2>&1
 
 if not exist "dist\igr_v%IGR_VERSION%.exe" (
     echo.
@@ -357,6 +382,29 @@ echo   Done.
 REM Compile IGR exe
 echo.
 echo [4/7] Compiling igr_v%IGR_VERSION%.exe...
+set "PYARMOR_OK=0"
+set "BUILD_SRC=main_build.py"
+set "EXTRA_PYARMOR_FLAGS="
+if "%FEAT_OBFUSCATION%"=="1" (
+    echo   PyArmor obfuscation enabled - installing pyarmor...
+    pip install pyarmor >nul 2>&1
+    if exist obf_dist rd /s /q obf_dist >nul 2>&1
+    pyarmor gen -O obf_dist main_build.py >nul 2>&1
+    if exist "obf_dist\main_build.py" (
+        set "PYARMOR_OK=1"
+        set "BUILD_SRC=obf_dist\main_build.py"
+        for /d %%d in ("obf_dist\pyarmor_runtime_*") do set "RUNTIME_PKG=%%~nxd"
+        if defined RUNTIME_PKG (
+            set "EXTRA_PYARMOR_FLAGS=--paths obf_dist --collect-all !RUNTIME_PKG!"
+        ) else (
+            set "EXTRA_PYARMOR_FLAGS=--paths obf_dist"
+        )
+        echo   PyArmor obfuscation applied.
+    ) else (
+        echo   WARNING: PyArmor obfuscation failed - building without obfuscation.
+        set "BUILD_SRC=main_build.py"
+    )
+)
 python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG% --clean --noconfirm ^
     --hidden-import flask ^
     --hidden-import requests ^
@@ -370,9 +418,11 @@ python -m PyInstaller --onefile --noconsole --name igr_v%IGR_VERSION% %ICON_FLAG
     --hidden-import cryptography ^
     --hidden-import cryptography.hazmat.primitives.ciphers.aead ^
     --hidden-import sqlite3 ^
-    main_build.py
+    %EXTRA_PYARMOR_FLAGS% ^
+    %BUILD_SRC%
 
 del /f /q "main_build.py" >nul 2>&1
+if exist obf_dist rd /s /q obf_dist >nul 2>&1
 
 if not exist "dist\igr_v%IGR_VERSION%.exe" (
     echo.
